@@ -793,11 +793,11 @@ const youtubeLatestShortEmbeds = async (
         });
         if (message.id) {
             await db
-                .update(schema.discordBotYoutubeLatest)
+                .update(schema.discordBotYoutubeLatestShort)
                 .set({
                     video_id: dataLatest.video_id,
                 })
-                .where(eq(schema.discordBotYoutubeLatest.id, item.id));
+                .where(eq(schema.discordBotYoutubeLatestShort.id, item.id));
             return;
         }
     } catch (error) {

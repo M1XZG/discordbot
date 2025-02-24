@@ -710,7 +710,9 @@ const youtubeLatestShortEmbeds = async (
 ) => {
     item.username = item.username.replace("@", "");
     console_log.log(
-        `Processed Youtube Latest Embed for ${index + 1}: ${item.username}`
+        `Processed Youtube Latest short Embed for ${index + 1}: ${
+            item.username
+        }`
     );
     const discordServer = discord.guilds.cache.get(item.server_id);
     if (!discordServer) return;

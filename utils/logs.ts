@@ -66,3 +66,19 @@ export function colour(
     const color: any = coloursList[colour] || 36;
     console.log(`\x1b[${color}m${message}\x1b[0m`);
 }
+
+export const logProcessing = (
+    platform: string,
+    action: string,
+    count: number
+) => {
+    log(`${platform} ${action} Processing ${count} Users`);
+};
+
+export const logFinished = (
+    platform: string,
+    action: string,
+    count: number
+) => {
+    log(`${platform} ${action} Finished Processing ${count} Users`);
+};

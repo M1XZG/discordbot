@@ -5,19 +5,22 @@
   "main": "index.ts",
   "scripts": {
     "build": "npx tsc",
-    "start": "node build/shard.js",
+    "start": "node build/index.js",
     "dev": "nodemon index.ts",
-    "build:start": "npx tsc && node build/shard.js"
+    "build:start": "npx tsc && node build/index.js",
+    "db:push": "npx drizzle-kit push"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@hono/node-server": "^1.13.7",
     "@types/node": "^20.14.11",
     "@types/node-cron": "^3.0.11",
     "discord.js": "^14.15.3",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.32.0",
+    "hono": "^4.6.16",
     "node-cron": "^3.0.3",
     "nodemon": "^3.1.4",
     "postgres": "^3.4.4",

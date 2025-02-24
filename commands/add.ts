@@ -8,15 +8,33 @@ import {
     ButtonStyle,
     ActionRowBuilder,
 } from "discord.js";
-import { discord, AddButtonDataTwitch } from "..";
+import {
+    discord,
+    AddButtonDataTwitch,
+    AddButtonDataYoutubeLive,
+    AddButtonDataYoutubeLatest,
+    AddButtonDataYoutubeLatestShort,
+} from "..";
 export default {
     data: new SlashCommandBuilder()
         .setName("add")
-        .setDescription("Add twitch user")
+        .setDescription("Add notification via platform")
+        .addStringOption((option) =>
+            option
+                .setName("platform")
+                .setDescription("Choose the platform")
+                .addChoices([
+                    { name: "Twitch", value: "twitch" },
+                    { name: "YouTube Live", value: "youtube-live" },
+                    { name: "YouTube Latest", value: "youtube-latest" },
+                    { name: "Youtube Short", value: "youtube-short-latest" },
+                ])
+                .setRequired(true)
+        )
         .addStringOption((option) =>
             option
                 .setName("username")
-                .setDescription("Twitch username to add")
+                .setDescription("Username of the platform")
                 .setRequired(true)
         )
         .addChannelOption((option) =>
@@ -28,9 +46,6 @@ export default {
                 .setName("channel")
                 .setDescription("Channel to add to")
                 .setRequired(true)
-        )
-        .addRoleOption((option) =>
-            option.setName("mention").setDescription("Role to notify")
         )
         .addStringOption((option) =>
             option
@@ -50,66 +65,265 @@ export default {
             await inter.deferReply({
                 ephemeral: true,
             });
+            const platform = inter.options.getString("platform");
             const username = inter.options.getString("username");
             const channel = inter.options.getChannel("channel");
             const keep_vod = inter.options.getBoolean("keep_vod");
-            const mention = inter.options.getRole("mention");
             const message = inter.options.getString("message");
             try {
-                const dataLiveReq = await fetch(
-                    process.env.API_SERVER + "/v2/live/twitch/" + username,
-                    {
-                        method: "GET",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
+                if (platform === "twitch") {
+                    const dataLiveReq = await fetch(
+                        process.env.API_SERVER + "/v2/live/twitch/" + username,
+                        {
+                            method: "GET",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                        }
+                    );
+                    const dataLive = await dataLiveReq.json();
+                    if (!dataLive?.user?.username) {
+                        return await inter.editReply({
+                            content: `User ${username} not found on Twitch`,
+                        });
                     }
-                );
-                const dataLive = await dataLiveReq.json();
-                if (!dataLive?.user?.username) {
-                    return await inter.editReply({
-                        content: `User ${username} not found on Twitch`,
+                    const embed = new EmbedBuilder();
+                    embed.setTitle(`${dataLive.user.username}`);
+                    embed.setURL(`https://www.twitch.tv/${username}`);
+                    embed.setAuthor({
+                        name: "Doras Bot",
+                        iconURL: discord.user?.avatarURL() || "",
                     });
+                    embed.setColor(0x6441a5);
+                    embed.setDescription(
+                        `${username} added by ${inter.user.username}`
+                    );
+                    embed.setImage(dataLive.user.profile_image);
+                    embed.setTimestamp();
+                    let buttonAccept = new ButtonBuilder();
+                    buttonAccept.setCustomId("accept-twitch");
+                    buttonAccept.setLabel("Accept");
+                    buttonAccept.setStyle(ButtonStyle.Success);
+                    let buttonReject = new ButtonBuilder();
+                    buttonReject.setCustomId("reject-twitch");
+                    buttonReject.setLabel("Reject");
+                    buttonReject.setStyle(ButtonStyle.Danger);
+                    const row = new ActionRowBuilder().addComponents(
+                        buttonAccept,
+                        buttonReject
+                    );
+                    const data = await inter.editReply({
+                        embeds: [embed],
+                        //@ts-expect-error
+                        components: [row],
+                    });
+                    AddButtonDataTwitch.set(data.id, {
+                        username: username,
+                        channel: channel?.id || "",
+                        server: inter.guild?.id || "",
+                        account: inter.user.id,
+                        keep_vod: keep_vod || false,
+                        mention: null,
+                        message: message || null,
+                    });
+                    return;
                 }
-                const embed = new EmbedBuilder();
-                embed.setTitle(`${dataLive.user.username}`);
-                embed.setURL(`https://www.twitch.tv/${username}`);
-                embed.setAuthor({
-                    name: "Doras Bot",
-                    iconURL: discord.user?.avatarURL() || "",
-                });
-                embed.setColor(0x6441a5);
-                embed.setDescription(
-                    `${username} added by ${inter.user.username}`
-                );
-                embed.setImage(dataLive.user.profile_image);
-                embed.setTimestamp();
-                let buttonAccept = new ButtonBuilder();
-                buttonAccept.setCustomId("accept");
-                buttonAccept.setLabel("Accept");
-                buttonAccept.setStyle(ButtonStyle.Success);
-                let buttonReject = new ButtonBuilder();
-                buttonReject.setCustomId("reject");
-                buttonReject.setLabel("Reject");
-                buttonReject.setStyle(ButtonStyle.Danger);
-                const row = new ActionRowBuilder().addComponents(
-                    buttonAccept,
-                    buttonReject
-                );
-                const data = await inter.editReply({
-                    embeds: [embed],
-                    //@ts-expect-error
-                    components: [row],
-                });
-                AddButtonDataTwitch.set(data.id, {
-                    username: username,
-                    channel: channel?.id || "",
-                    server: inter.guild?.id || "",
-                    account: inter.user.id,
-                    keep_vod: keep_vod || false,
-                    mention: mention?.id || null,
-                    message: message || null,
-                });
+                if (platform === "youtube-live") {
+                    const dataLiveReq = await fetch(
+                        process.env.API_SERVER +
+                            "/v2/live/youtube/@" +
+                            username?.replace("@", ""),
+                        {
+                            method: "GET",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                        }
+                    );
+                    const dataLive = await dataLiveReq.json();
+                    if (!dataLive?.channel?.id) {
+                        return await inter.editReply({
+                            content: `User ${username?.replace(
+                                "@",
+                                ""
+                            )} not found on Youtube`,
+                        });
+                    }
+                    const embed = new EmbedBuilder();
+                    embed.setTitle(`${dataLive.channel.name}`);
+                    embed.setURL(
+                        `https://www.youtube.com/@${username?.replace("@", "")}`
+                    );
+                    embed.setAuthor({
+                        name: "Doras Bot",
+                        iconURL: discord.user?.avatarURL() || "",
+                    });
+                    embed.setColor(0x6441a5);
+                    embed.setDescription(
+                        `${username?.replace("@", "")} added by ${
+                            inter.user.username
+                        }`
+                    );
+                    embed.setImage(dataLive.channel.profile_image);
+                    embed.setTimestamp();
+                    let buttonAccept = new ButtonBuilder();
+                    buttonAccept.setCustomId("accept-youtube-live");
+                    buttonAccept.setLabel("Accept");
+                    buttonAccept.setStyle(ButtonStyle.Success);
+                    let buttonReject = new ButtonBuilder();
+                    buttonReject.setCustomId("reject-youtube-live");
+                    buttonReject.setLabel("Reject");
+                    buttonReject.setStyle(ButtonStyle.Danger);
+                    const row = new ActionRowBuilder().addComponents(
+                        buttonAccept,
+                        buttonReject
+                    );
+                    const data = await inter.editReply({
+                        embeds: [embed],
+                        //@ts-expect-error
+                        components: [row],
+                    });
+                    AddButtonDataYoutubeLive.set(data.id, {
+                        username: username?.replace("@", ""),
+                        channel: channel?.id || "",
+                        server: inter.guild?.id || "",
+                        account: inter.user.id,
+                        keep_vod: keep_vod || false,
+                        mention: null,
+                        message: message || null,
+                    });
+                    return;
+                }
+                if (platform === "youtube-latest") {
+                    const dataLiveReq = await fetch(
+                        process.env.API_SERVER +
+                            "/v2/live/youtube/@" +
+                            username?.replace("@", ""),
+                        {
+                            method: "GET",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                        }
+                    );
+                    const dataLive = await dataLiveReq.json();
+                    if (!dataLive?.channel?.id) {
+                        return await inter.editReply({
+                            content: `User ${username?.replace(
+                                "@",
+                                ""
+                            )} not found on Youtube`,
+                        });
+                    }
+                    const embed = new EmbedBuilder();
+                    embed.setTitle(`${dataLive.channel.name}`);
+                    embed.setURL(
+                        `https://www.youtube.com/@${username?.replace("@", "")}`
+                    );
+                    embed.setAuthor({
+                        name: "Doras Bot",
+                        iconURL: discord.user?.avatarURL() || "",
+                    });
+                    embed.setColor(0x6441a5);
+                    embed.setDescription(
+                        `${username?.replace("@", "")} added by ${
+                            inter.user.username
+                        }`
+                    );
+                    embed.setImage(dataLive.channel.profile_image);
+                    embed.setTimestamp();
+                    let buttonAccept = new ButtonBuilder();
+                    buttonAccept.setCustomId("accept-youtube-latest");
+                    buttonAccept.setLabel("Accept");
+                    buttonAccept.setStyle(ButtonStyle.Success);
+                    let buttonReject = new ButtonBuilder();
+                    buttonReject.setCustomId("reject-youtube-latest");
+                    buttonReject.setLabel("Reject");
+                    buttonReject.setStyle(ButtonStyle.Danger);
+                    const row = new ActionRowBuilder().addComponents(
+                        buttonAccept,
+                        buttonReject
+                    );
+                    const data = await inter.editReply({
+                        embeds: [embed],
+                        //@ts-expect-error
+                        components: [row],
+                    });
+                    AddButtonDataYoutubeLatest.set(data.id, {
+                        username: username?.replace("@", ""),
+                        channel: channel?.id || "",
+                        server: inter.guild?.id || "",
+                        account: inter.user.id,
+                        message: message || null,
+                        youtube_id: dataLive.channel?.id || "",
+                    });
+                    return;
+                }
+                if (platform === "youtube-short-latest") {
+                    const dataLiveReq = await fetch(
+                        process.env.API_SERVER +
+                            "/v2/live/youtube/@" +
+                            username?.replace("@", ""),
+                        {
+                            method: "GET",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                        }
+                    );
+                    const dataLive = await dataLiveReq.json();
+                    if (!dataLive?.channel?.id) {
+                        return await inter.editReply({
+                            content: `User ${username?.replace(
+                                "@",
+                                ""
+                            )} not found on Youtube`,
+                        });
+                    }
+                    const embed = new EmbedBuilder();
+                    embed.setTitle(`${dataLive.channel.name}`);
+                    embed.setURL(
+                        `https://www.youtube.com/@${username?.replace("@", "")}`
+                    );
+                    embed.setAuthor({
+                        name: "Doras Bot",
+                        iconURL: discord.user?.avatarURL() || "",
+                    });
+                    embed.setColor(0x6441a5);
+                    embed.setDescription(
+                        `${username?.replace("@", "")} added by ${
+                            inter.user.username
+                        }`
+                    );
+                    embed.setImage(dataLive.channel.profile_image);
+                    embed.setTimestamp();
+                    let buttonAccept = new ButtonBuilder();
+                    buttonAccept.setCustomId("accept-youtube-latest-short");
+                    buttonAccept.setLabel("Accept");
+                    buttonAccept.setStyle(ButtonStyle.Success);
+                    let buttonReject = new ButtonBuilder();
+                    buttonReject.setCustomId("reject-youtube-latest-short");
+                    buttonReject.setLabel("Reject");
+                    buttonReject.setStyle(ButtonStyle.Danger);
+                    const row = new ActionRowBuilder().addComponents(
+                        buttonAccept,
+                        buttonReject
+                    );
+                    const data = await inter.editReply({
+                        embeds: [embed],
+                        //@ts-expect-error
+                        components: [row],
+                    });
+                    AddButtonDataYoutubeLatestShort.set(data.id, {
+                        username: username?.replace("@", ""),
+                        channel: channel?.id || "",
+                        server: inter.guild?.id || "",
+                        account: inter.user.id,
+                        message: message || null,
+                        youtube_id: dataLive.channel?.id || "",
+                    });
+                    return;
+                }
             } catch (error) {
                 console.error("Error executing add command: ", error);
                 await inter.editReply({

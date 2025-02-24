@@ -1,5 +1,7 @@
 <!-- Improved compatibility of back to top link: See: https://github.com/othneildrew/Best-README-Template/pull/73 -->
+
 <a id="readme-top"></a>
+
 <!--
 *** Thanks for checking out the Best-README-Template. If you have a suggestion
 *** that would make this better, please fork the repo and create a pull request
@@ -7,8 +9,6 @@
 *** Don't forget to give the project a star!
 *** Thanks again! Now go create something AMAZING! :D
 -->
-
-
 
 <!-- PROJECT SHIELDS -->
 <!--
@@ -18,12 +18,12 @@
 *** for contributors-url, forks-url, etc. This is an optional, concise syntax you may use.
 *** https://www.markdownguide.org/basic-syntax/#reference-style-links
 -->
+
 [![Contributors][contributors-shield]][contributors-url]
 [![Forks][forks-shield]][forks-url]
 [![Stargazers][stars-shield]][stars-url]
 [![Issues][issues-shield]][issues-url]
 [![GPL License][license-shield]][license-url]
-
 
 [![Deployments](https://github.com/dorasto/discordbot/actions/workflows/docker-build.yml/badge.svg)](https://github.com/dorasto/discordbot/actions/workflows/docker-build.yml)
 
@@ -49,8 +49,6 @@
   </p>
 </div>
 
-
-
 <!-- TABLE OF CONTENTS -->
 <details>
   <summary>Table of Contents</summary>
@@ -75,16 +73,15 @@
   </ol>
 </details>
 
-
-
 <!-- ABOUT THE PROJECT -->
+
 ## About The Project
 
 ![Screen Shot](https://cdn.doras.to/doras/dorasbot/Screenshot%202024-07-23%20065736.png)
 
 Doras Discord Bot is an open source GPL bot to post live stream notifications & vods to your servers. It's primarily designed for [Doras] users, however it's not required.
 
-We've decided to open source the project should you wish to host it your self. 
+We've decided to open source the project should you wish to host it your self.
 
 Contributions are also welcome!
 
@@ -94,8 +91,8 @@ Contributions are also welcome!
 ![docker]
 ![discordjs]
 
-
 <!-- GETTING STARTED -->
+
 ## Getting Started
 
 This is an example of how you may give instructions on setting up your project locally.
@@ -104,8 +101,9 @@ To get a local copy up and running follow these simple example steps.
 ### Prerequisites
 
 This is an example of how to list things you need to use the software and how to install them.
-* pnpm
-* docker
+
+-   pnpm
+-   docker
 
 ### Installation
 
@@ -115,13 +113,16 @@ This is an example of how to list things you need to use the software and how to
 4. Run `pnpm dev`
 
 <!-- ROADMAP -->
+
 ## Roadmap
 
-- [ ] YouTube live & video embeds
+-   YouTube live & video embeds
+-   YouTube Shorts
 
 See the [open issues](https://github.com/dorasto/discordbot/issues) for a full list of proposed features (and known issues).
 
 <!-- CONTRIBUTING -->
+
 ## Contributing
 
 Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
@@ -136,12 +137,13 @@ Don't forget to give the project a star! Thanks again!
 5. Open a Pull Request
 
 <!-- LICENSE -->
+
 ## License
 
 Distributed under the GPLv3 License. See `LICENSE` for more information.
 
-
 <!-- CONTACT -->
+
 ## Contact
 
 The Doras Team - [@doras_to](https://twitter.com/doras_to) - hi@doras.to
@@ -150,11 +152,14 @@ Project Link: [https://github.com/dorasto/discordbot](https://github.com/dorasto
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
+
 [typescript]: https://img.shields.io/badge/typescript-3178c6?style=for-the-badge&logo=typescript&logoColor=white
 [docker]: https://img.shields.io/badge/docker-2496ec?style=for-the-badge&logo=docker&logoColor=white
 [discordjs]: https://img.shields.io/badge/discord.js-2496ec?style=for-the-badge&logo=discord&logoColor=white
 [Doras]: https://doras.to
+
 <!-- dummy data -->
+
 [contributors-shield]: https://img.shields.io/github/contributors/dorasto/discordbot.svg?style=for-the-badge
 [contributors-url]: https://github.com/dorasto/discordbot/graphs/contributors
 [forks-shield]: https://img.shields.io/github/forks/dorasto/discordbot.svg?style=for-the-badge
@@ -181,4 +186,4 @@ Project Link: [https://github.com/dorasto/discordbot](https://github.com/dorasto
 [Bootstrap.com]: https://img.shields.io/badge/Bootstrap-563D7C?style=for-the-badge&logo=bootstrap&logoColor=white
 [Bootstrap-url]: https://getbootstrap.com
 [JQuery.com]: https://img.shields.io/badge/jQuery-0769AD?style=for-the-badge&logo=jquery&logoColor=white
-[JQuery-url]: https://jquery.com 
+[JQuery-url]: https://jquery.com

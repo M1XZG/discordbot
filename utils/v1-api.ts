@@ -55,13 +55,13 @@ export const allowedTypesConnectionAdd: {
     },
     {
         key: "social_links",
-        type: "string",
+        type: "boolean",
         description: "social links",
         optinal: true,
     },
     {
         key: "social_link_url",
-        type: "string",
+        type: "string|null",
         description: "social link url",
         optinal: true,
     },
@@ -129,13 +129,13 @@ export const allowedTypesConnectionEdit: {
     },
     {
         key: "social_links",
-        type: "string",
+        type: "boolean",
         description: "social links",
         optinal: true,
     },
     {
         key: "social_link_url",
-        type: "string",
+        type: "string|null",
         description: "social link url",
         optinal: true,
     },
@@ -231,8 +231,20 @@ export function validateBodyConnectionAdd(body: any): {
             }
             continue; // If the field is optional, skip validation
         }
-
         // Validate field type
+        if (type === "string|null") {
+            if (body[key] === null || typeof body[key] === "string") {
+                return { valid: true };
+            } else {
+                return {
+                    valid: false,
+                    error: `Invalid type for field '${key}'. Expected 'string' or 'null', but got '${typeof body[
+                        key
+                    ]}'.`,
+                    fields: [{ field: key, type, description }],
+                };
+            }
+        }
         result = validateType(key, typeof body[key], type, description);
         if (!result.valid) return result;
     }
@@ -283,6 +295,19 @@ export function validateBodyConnectionEdit(body: any): {
         }
 
         // Validate field type
+        if (type === "string|null") {
+            if (body[key] === null || typeof body[key] === "string") {
+                return { valid: true };
+            } else {
+                return {
+                    valid: false,
+                    error: `Invalid type for field '${key}'. Expected 'string' or 'null', but got '${typeof body[
+                        key
+                    ]}'.`,
+                    fields: [{ field: key, type, description }],
+                };
+            }
+        }
         result = validateType(key, typeof body[key], type, description);
         if (!result.valid) return result;
     }

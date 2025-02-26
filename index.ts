@@ -205,7 +205,9 @@ const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                 new ButtonBuilder()
                     .setLabel("Social Links")
                     .setStyle(ButtonStyle.Link)
-                    .setURL(item.social_link_url || "")) ||
+                    .setURL(
+                        "https://doras.to/" + item.social_link_url || ""
+                    )) ||
             "";
         if (item.social_links && item.social_link_url)
             buttonLinks && row.addComponents(buttonLinks);
@@ -535,7 +537,9 @@ const youtubeLiveEmbeds = async (item: IYoutubeLive, index: number) => {
                 new ButtonBuilder()
                     .setLabel("Social Links")
                     .setStyle(ButtonStyle.Link)
-                    .setURL(item.social_link_url || "")) ||
+                    .setURL(
+                        "https://doras.to/" + item.social_link_url || ""
+                    )) ||
             "";
         if (item.social_links && item.social_link_url)
             buttonLinks && row.addComponents(buttonLinks);
@@ -733,7 +737,9 @@ const youtubeLatestEmbeds = async (item: IYoutubeLatest, index: number) => {
                 new ButtonBuilder()
                     .setLabel("Social Links")
                     .setStyle(ButtonStyle.Link)
-                    .setURL(item.social_link_url || "")) ||
+                    .setURL(
+                        "https://doras.to/" + item.social_link_url || ""
+                    )) ||
             "";
         if (item.social_links && item.social_link_url)
             buttonLinks && row.addComponents(buttonLinks);
@@ -835,7 +841,9 @@ const youtubeLatestShortEmbeds = async (
                 new ButtonBuilder()
                     .setLabel("Social Links")
                     .setStyle(ButtonStyle.Link)
-                    .setURL(item.social_link_url || "")) ||
+                    .setURL(
+                        "https://doras.to/" + item.social_link_url || ""
+                    )) ||
             "";
         if (item.social_links && item.social_link_url)
             buttonLinks && row.addComponents(buttonLinks);

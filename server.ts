@@ -101,11 +101,19 @@ app.get("/api/v1/get_all_connections", async (c) => {
                     .from(discordBotYoutubeLive)
                     .where(eq(discordBotYoutubeLive.server_id, e.id))
                     .execute();
-
+                const textChannels = discordServer.channels.cache
+                    .filter((channel) => channel.isTextBased())
+                    .map((channel) => ({
+                        id: channel.id,
+                        name: channel.name,
+                        type: channel.type,
+                        created_at: channel.createdAt,
+                    }));
                 return {
                     id: e.id,
                     name: e.name,
                     icon: discordServer.iconURL() || getRandomAvatarUrl(),
+                    channels: textChannels,
                     twitch: twitch,
                     youtubeLive: youtubeLive,
                     youtubeLatest: youtubeLatest,
@@ -331,7 +339,7 @@ app.post("/api/v1/connection", async (e) => {
                 });
             }
         }
-        if (type === "youtube_live") {
+        if (type === "youtubeLive") {
             const dataLiveReq = await fetch(
                 process.env.API_SERVER +
                     "/v2/live/youtube/@" +
@@ -380,7 +388,7 @@ app.post("/api/v1/connection", async (e) => {
                 });
             }
         }
-        if (type === "youtube_latest") {
+        if (type === "youtubeLatest") {
             const dataLiveReq = await fetch(
                 process.env.API_SERVER +
                     "/v2/live/youtube/@" +
@@ -429,7 +437,7 @@ app.post("/api/v1/connection", async (e) => {
                 });
             }
         }
-        if (type === "youtube_latest_short") {
+        if (type === "youtubeShort") {
             const dataLiveReq = await fetch(
                 process.env.API_SERVER +
                     "/v2/live/youtube/@" +
@@ -488,17 +496,17 @@ app.post("/api/v1/connection", async (e) => {
                     description: "twitch connection",
                 },
                 {
-                    key: "youtube_live",
+                    key: "youtubeLive",
                     type: "string",
                     description: "youtube live connection",
                 },
                 {
-                    key: "youtube_latest",
+                    key: "youtubeLatest",
                     type: "string",
                     description: "youtube latest connection",
                 },
                 {
-                    key: "youtube_latest_short",
+                    key: "youtubeShort",
                     type: "string",
                     description: "youtube latest short connection",
                 },
@@ -617,7 +625,7 @@ app.patch("/api/v1/connection", async (e) => {
                 });
             }
         }
-        if (type === "youtube_live") {
+        if (type === "youtubeLive") {
             const dataLiveReq = await fetch(
                 process.env.API_SERVER +
                     "/v2/live/youtube/@" +
@@ -669,7 +677,7 @@ app.patch("/api/v1/connection", async (e) => {
                 });
             }
         }
-        if (type === "youtube_latest") {
+        if (type === "youtubeLatest") {
             const dataLiveReq = await fetch(
                 process.env.API_SERVER +
                     "/v2/live/youtube/@" +
@@ -721,7 +729,7 @@ app.patch("/api/v1/connection", async (e) => {
                 });
             }
         }
-        if (type === "youtube_latest_short") {
+        if (type === "youtubeShort") {
             const dataLiveReq = await fetch(
                 process.env.API_SERVER +
                     "/v2/live/youtube/@" +
@@ -783,17 +791,17 @@ app.patch("/api/v1/connection", async (e) => {
                     description: "twitch connection",
                 },
                 {
-                    key: "youtube_live",
+                    key: "youtubeLive",
                     type: "string",
                     description: "youtube live connection",
                 },
                 {
-                    key: "youtube_latest",
+                    key: "youtubeLatest",
                     type: "string",
                     description: "youtube latest connection",
                 },
                 {
-                    key: "youtube_latest_short",
+                    key: "youtubeShort",
                     type: "string",
                     description: "youtube latest short connection",
                 },
@@ -888,7 +896,7 @@ app.delete("/api/v1/connection", async (e) => {
                 });
             }
         }
-        if (type === "youtube_live") {
+        if (type === "youtubeLive") {
             const getRow = await db
                 .select()
                 .from(discordBotYoutubeLive)
@@ -924,7 +932,7 @@ app.delete("/api/v1/connection", async (e) => {
                 });
             }
         }
-        if (type === "youtube_latest") {
+        if (type === "youtubeLatest") {
             const getRow = await db
                 .select()
                 .from(discordBotYoutubeLatest)
@@ -960,7 +968,7 @@ app.delete("/api/v1/connection", async (e) => {
                 });
             }
         }
-        if (type === "youtube_latest_short") {
+        if (type === "youtubeShort") {
             const getRow = await db
                 .select()
                 .from(discordBotYoutubeLatestShort)
@@ -1006,17 +1014,17 @@ app.delete("/api/v1/connection", async (e) => {
                     description: "twitch connection",
                 },
                 {
-                    key: "youtube_live",
+                    key: "youtubeLive",
                     type: "string",
                     description: "youtube live connection",
                 },
                 {
-                    key: "youtube_latest",
+                    key: "youtubeLatest",
                     type: "string",
                     description: "youtube latest connection",
                 },
                 {
-                    key: "youtube_latest_short",
+                    key: "youtubeShort",
                     type: "string",
                     description: "youtube latest short connection",
                 },

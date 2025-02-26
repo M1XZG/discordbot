@@ -114,6 +114,14 @@ app.get("/api/v1/get_all_connections", async (c) => {
                     name: e.name,
                     icon: discordServer.iconURL() || getRandomAvatarUrl(),
                     channels: textChannels,
+                    roles: discordServer.roles.cache
+                        .filter((role) => !role.managed)
+                        .map((role) => ({
+                            id: role.id,
+                            name: role.name,
+                            color: role.hexColor,
+                            created_at: role.createdAt,
+                        })),
                     twitch: twitch,
                     youtubeLive: youtubeLive,
                     youtubeLatest: youtubeLatest,

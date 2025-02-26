@@ -16,7 +16,12 @@ import { readdirSync } from "fs";
 import { join } from "path";
 import { db } from "./db";
 import * as schema from "./db/schema";
-import { ITwitch, IYoutubeLatest, IYoutubeLive } from "./types";
+import {
+    ITwitch,
+    IYoutubeLatest,
+    IYoutubeLatestShort,
+    IYoutubeLive,
+} from "./types";
 import { eq } from "drizzle-orm";
 import cron from "node-cron";
 export const AddButtonDataTwitch = new Map();
@@ -200,7 +205,9 @@ const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                 new ButtonBuilder()
                     .setLabel("Social Links")
                     .setStyle(ButtonStyle.Link)
-                    .setURL(item.social_link_url || "")) ||
+                    .setURL(
+                        "https://doras.to/" + item.social_link_url || ""
+                    )) ||
             "";
         if (item.social_links && item.social_link_url)
             buttonLinks && row.addComponents(buttonLinks);
@@ -530,7 +537,9 @@ const youtubeLiveEmbeds = async (item: IYoutubeLive, index: number) => {
                 new ButtonBuilder()
                     .setLabel("Social Links")
                     .setStyle(ButtonStyle.Link)
-                    .setURL(item.social_link_url || "")) ||
+                    .setURL(
+                        "https://doras.to/" + item.social_link_url || ""
+                    )) ||
             "";
         if (item.social_links && item.social_link_url)
             buttonLinks && row.addComponents(buttonLinks);
@@ -692,7 +701,7 @@ const youtubeLatestEmbeds = async (item: IYoutubeLatest, index: number) => {
             fields: [
                 {
                     name: "Views",
-                    value: dataLatest?.views,
+                    value: dataLatest?.views || "0",
                     inline: true,
                 },
                 {
@@ -728,7 +737,9 @@ const youtubeLatestEmbeds = async (item: IYoutubeLatest, index: number) => {
                 new ButtonBuilder()
                     .setLabel("Social Links")
                     .setStyle(ButtonStyle.Link)
-                    .setURL(item.social_link_url || "")) ||
+                    .setURL(
+                        "https://doras.to/" + item.social_link_url || ""
+                    )) ||
             "";
         if (item.social_links && item.social_link_url)
             buttonLinks && row.addComponents(buttonLinks);
@@ -754,7 +765,7 @@ const youtubeLatestEmbeds = async (item: IYoutubeLatest, index: number) => {
     }
 };
 const youtubeLatestShortEmbeds = async (
-    item: IYoutubeLatest,
+    item: IYoutubeLatestShort,
     index: number
 ) => {
     item.username = item.username.replace("@", "");
@@ -830,7 +841,9 @@ const youtubeLatestShortEmbeds = async (
                 new ButtonBuilder()
                     .setLabel("Social Links")
                     .setStyle(ButtonStyle.Link)
-                    .setURL(item.social_link_url || "")) ||
+                    .setURL(
+                        "https://doras.to/" + item.social_link_url || ""
+                    )) ||
             "";
         if (item.social_links && item.social_link_url)
             buttonLinks && row.addComponents(buttonLinks);

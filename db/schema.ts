@@ -76,3 +76,11 @@ export const discordBotServer = pgTable("discord_bot_server", {
     roles: jsonb("roles").default([]),
     created_at: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const userServerAccess = pgTable("user_server_access", {
+    id: uuid("id").primaryKey().notNull(), // Unique identifier for each user record
+    discord_user_id: text("discord_user_id").notNull().unique(), // The user's Discord ID
+    discord_username: text("discord_username").notNull(), // The user's Discord username
+    servers: jsonb("servers").default([]), // An array of servers the user is part of (JSONB type)
+    created_at: timestamp("created_at").defaultNow().notNull(), // Timestamp of when the user record was created
+});

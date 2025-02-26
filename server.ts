@@ -122,6 +122,13 @@ app.get("/api/v1/get_all_connections", async (c) => {
                             color: role.hexColor,
                             created_at: role.createdAt,
                         })),
+                    members: discordServer.members.cache.map((member) => ({
+                        id: member.id,
+                        username: member.user.username,
+                        avatar: member.user.avatarURL(),
+                        discriminator: member.user.discriminator,
+                        created_at: member.joinedAt,
+                    })),
                     twitch: twitch,
                     youtubeLive: youtubeLive,
                     youtubeLatest: youtubeLatest,

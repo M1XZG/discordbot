@@ -118,9 +118,19 @@ const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
         `Processed Twitch Live Embed for ${index + 1}: ${item.username}`
     );
     const discordServer = discord.guilds.cache.get(item.server_id);
-    if (!discordServer) return;
+    if (!discordServer) {
+        console_log.error(
+            `Discord Server not found for ${item.username} server: ${item.server_id}`
+        );
+        return;
+    }
     const channel = discordServer.channels.cache.get(item.channel_id);
-    if (!channel) return;
+    if (!channel) {
+        console_log.error(
+            `Discord Channel not found for ${item.username} server: ${item.server_id}`
+        );
+        return;
+    }
     try {
         const dataLiveReq = await fetch(
             process.env.API_SERVER + "/v2/live/twitch/" + item.username,
@@ -179,10 +189,11 @@ const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                 iconURL: "https://cdn.doras.to/doras/icons/light/doras.webp",
             },
         };
+        const url = `https://www.twitch.tv/${item.username?.toLowerCase()}`;
         let buttonWatch = new ButtonBuilder()
             .setLabel("Watch Stream")
             .setStyle(ButtonStyle.Link)
-            .setURL(`https://www.twitch.tv/${item.username.toLowerCase()}`);
+            .setURL(String(url)); // Explicitly convert to string
         let row: any = new ActionRowBuilder().addComponents(buttonWatch);
         let buttonLinks =
             (item.social_link_url &&
@@ -218,7 +229,8 @@ const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
             }
             if (item.vod_id === dataLive.video.live_id) {
                 buttonWatch.setLabel("Watch Vod");
-                buttonWatch.setURL(dataLive.video.url);
+                dataLive.video.url &&
+                    buttonWatch.setURL(String(dataLive.video.url));
                 if (!channel.isTextBased()) return;
                 embed.url = dataLive.video.url;
                 embed.title = dataLive.video.title;
@@ -265,8 +277,15 @@ const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
             }
         }
         if (!channel.isTextBased()) return;
-        let mention: any =
-            item.mention && discordServer.roles.cache.get(item.mention);
+        let mention: any;
+        try {
+            mention =
+                item.mention && discordServer.roles.cache.get(item.mention);
+        } catch (error) {
+            console_log.error(
+                `Twitch ${item.username}: Error getting mention: ` + error
+            );
+        }
         if (
             (mention && mention.name == "@everyone") ||
             (mention && mention.name == "@here")
@@ -278,7 +297,7 @@ const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
         }
         if (!item.message_id) {
             const message = await channel.send({
-                content: mention,
+                content: item.message || "",
                 embeds: [embed],
                 components: [row],
             });
@@ -318,6 +337,7 @@ const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                 }
             });
     } catch (error) {
+        console.log(error);
         console_log.error(`Twitch ${item.username}: catch: ` + error);
         return;
     }
@@ -627,6 +647,7 @@ const youtubeLiveEmbeds = async (item: IYoutubeLive, index: number) => {
                 }
             });
     } catch (error) {
+        console.log(error);
         console_log.error(`Youtube ${item.username}: catch: ` + error);
         return;
     }
@@ -727,6 +748,7 @@ const youtubeLatestEmbeds = async (item: IYoutubeLatest, index: number) => {
             return;
         }
     } catch (error) {
+        console.log(error);
         console_log.error(`Youtube Latest ${item.username}: catch: ` + error);
         return;
     }
@@ -828,6 +850,7 @@ const youtubeLatestShortEmbeds = async (
             return;
         }
     } catch (error) {
+        console.log(error);
         console_log.error(
             `Youtube Latest Short ${item.username}: catch: ` + error
         );

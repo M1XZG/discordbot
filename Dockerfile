@@ -25,6 +25,6 @@ FROM base
 RUN npm install -g pnpm
 COPY --from=prod-deps /app/node_modules /app/node_modules
 COPY --from=build /app/build /app/build
-COPY --from=build /app/build/public /app/public
+COPY --from=build /app/public /app/build/public
 
 CMD [ "pnpm", "start" ]

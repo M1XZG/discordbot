@@ -928,6 +928,7 @@ app.get("/api/v1/all", async (e) => {
 });
 serve({
     fetch: app.fetch,
+    hostname: "0.0.0.0",
     port: 5468,
 }).on("listening", () => {
     console_log.colour("Server is running on port 5468", "green");

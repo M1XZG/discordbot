@@ -10,6 +10,7 @@ export const allowedTypesConnectionAdd: {
         type: "string",
         description: "discord server id",
     },
+    { key: "user_id", type: "string", description: "discord user id" },
     {
         key: "account_id",
         type: "string",
@@ -83,6 +84,7 @@ export const allowedTypesConnectionEdit: {
         type: "string",
         description: "discord server id",
     },
+    { key: "user_id", type: "string", description: "discord user id" },
     {
         key: "id",
         type: "string",
@@ -156,6 +158,7 @@ export const allowedTypesConnectionRemove: {
         type: "string",
         description: "discord server id",
     },
+    { key: "user_id", type: "string", description: "discord user id" },
     {
         key: "id",
         type: "string",

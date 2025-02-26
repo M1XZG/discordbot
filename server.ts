@@ -14,8 +14,12 @@ import {
     discordBotYoutubeLatest,
     discordBotYoutubeLatestShort,
     discordBotYoutubeLive,
+    userServerAccess,
 } from "./db/schema";
 import { and, eq } from "drizzle-orm";
+import path from "path";
+import fs from "fs/promises"; // Use fs.promises for async file reading
+import { IUserServerAccess } from "./types";
 //web server
 const baseHeaders = {
     "X-Service-Name": "DorasBot",
@@ -45,14 +49,81 @@ const checkAuthorizationMiddleware = async (
 };
 const app = new Hono();
 app.use("*", addHeadersMiddleware); // Apply middleware to all routes
-app.use("*", checkAuthorizationMiddleware); // Apply middleware to all routes
-app.get("/", (c) => {
-    return c.json({ message: "server is running" });
+app.use("/api/*", checkAuthorizationMiddleware); // Apply middleware to api routes for authorization
+app.get("/", async (c) => {
+    const filePath = path.join(__dirname, "public", "index.html");
+    const htmlContent = await fs.readFile(filePath, "utf-8");
+    return c.html(htmlContent);
+});
+app.get("/health", async (c) => {
+    return c.text("OK");
+});
+app.get("/favicon.ico", async (c) => {
+    return c.redirect("https://cdn.doras.to/doras/doras_favicon.png", 308);
 });
 function getRandomAvatarUrl() {
     const randomNumber = Math.floor(Math.random() * 6); // Random number between 0 and 5
     return `https://cdn.discordapp.com/embed/avatars/${randomNumber}.png`;
 }
+app.get("/api/v1/get_all_connections", async (c) => {
+    try {
+        const user_id = c.req.header().user_id;
+        if (!user_id) return c.json({ error: "user_id is required" });
+        const userData: any = await db
+            .select()
+            .from(userServerAccess)
+            .where(eq(userServerAccess.discord_user_id, user_id))
+            .limit(1)
+            .execute();
+        if (userData.length === 0) return c.json({ error: "User not found" });
+        const user: IUserServerAccess = userData[0];
+        const servers = await Promise.all(
+            user.servers.map(async (e) => {
+                const discordServer = discord.guilds.cache.get(e.id);
+                if (!discordServer) return null;
+                const twitch = await db
+                    .select()
+                    .from(discordBotTwitch)
+                    .where(eq(discordBotTwitch.server_id, e.id))
+                    .execute();
+                const youtubeLatest = await db
+                    .select()
+                    .from(discordBotYoutubeLatest)
+                    .where(eq(discordBotYoutubeLatest.server_id, e.id))
+                    .execute();
+                const youtubeShort = await db
+                    .select()
+                    .from(discordBotYoutubeLatestShort)
+                    .where(eq(discordBotYoutubeLatestShort.server_id, e.id))
+                    .execute();
+                const youtubeLive = await db
+                    .select()
+                    .from(discordBotYoutubeLive)
+                    .where(eq(discordBotYoutubeLive.server_id, e.id))
+                    .execute();
+
+                return {
+                    id: e.id,
+                    name: e.name,
+                    icon: discordServer.iconURL() || getRandomAvatarUrl(),
+                    twitch: twitch,
+                    youtubeLive: youtubeLive,
+                    youtubeLatest: youtubeLatest,
+                    youtubeShort: youtubeShort,
+                };
+            })
+        );
+        const filteredServers = servers.filter((server) => server !== null);
+
+        return c.json(filteredServers);
+    } catch (error) {
+        console.error(
+            "Error in /api/v1/get_all_connections:",
+            error?.toString()
+        );
+        return c.json({ error: error?.toString() }, { status: 500 });
+    }
+});
 app.post("/api/v1/get_server", async (c) => {
     try {
         const body = await c.req.json();
@@ -86,8 +157,8 @@ app.post("/api/v1/get_server", async (c) => {
             })),
         });
     } catch (error) {
-        console_log.error(error);
-        return c.json({ error: "Internal Server Error" }, 500);
+        console.error("Error in /api/v1/get_server:", error?.toString());
+        return c.json({ error: error?.toString() }, { status: 500 });
     }
 });
 app.post("/api/v1/get_connections", async (c) => {
@@ -151,8 +222,8 @@ app.post("/api/v1/get_connections", async (c) => {
             },
         });
     } catch (error) {
-        console.error(error);
-        return c.json({ error: "Internal Server Error" }, 500);
+        console.error("Error in /api/v1/get_connections:", error?.toString());
+        return c.json({ error: error?.toString() }, { status: 500 });
     }
 });
 app.post("/api/v1/connection", async (e) => {
@@ -173,6 +244,7 @@ app.post("/api/v1/connection", async (e) => {
         }
         const {
             server_id,
+            user_id,
             account_id,
             type,
             channel_id,
@@ -182,6 +254,35 @@ app.post("/api/v1/connection", async (e) => {
             keep_vod,
             message,
         } = body;
+        const userData: any = await db
+            .select()
+            .from(userServerAccess)
+            .where(eq(userServerAccess.discord_user_id, user_id))
+            .limit(1)
+            .execute();
+        if (!userData[0]) {
+            return e.json(
+                {
+                    status: 400,
+                    message: "You don't have access to this server",
+                },
+                {
+                    status: 400,
+                }
+            );
+        }
+        const user: IUserServerAccess = userData[0];
+        if (!user.servers.find((server) => server.id === server_id)) {
+            return e.json(
+                {
+                    status: 400,
+                    message: "You don't have access to this server",
+                },
+                {
+                    status: 400,
+                }
+            );
+        }
         const discordServer = discord.guilds.cache.get(server_id);
         if (!discordServer) return e.json({ error: "Server not found" });
         const channel = discordServer.channels.cache.get(channel_id);
@@ -404,8 +505,8 @@ app.post("/api/v1/connection", async (e) => {
             ],
         });
     } catch (error) {
-        console_log.error(error);
-        return e.json({ error: "Internal Server Error" }, 500);
+        console.error("Error in /api/v1/connection POST:", error?.toString());
+        return e.json({ error: error?.toString() }, { status: 500 });
     }
 });
 app.patch("/api/v1/connection", async (e) => {
@@ -426,6 +527,7 @@ app.patch("/api/v1/connection", async (e) => {
         }
         const {
             server_id,
+            user_id,
             id,
             type,
             channel_id,
@@ -435,6 +537,35 @@ app.patch("/api/v1/connection", async (e) => {
             social_link_url,
             keep_vod,
         } = body;
+        const userData: any = await db
+            .select()
+            .from(userServerAccess)
+            .where(eq(userServerAccess.discord_user_id, user_id))
+            .limit(1)
+            .execute();
+        if (!userData[0]) {
+            return e.json(
+                {
+                    status: 400,
+                    message: "You don't have access to this server",
+                },
+                {
+                    status: 400,
+                }
+            );
+        }
+        const user: IUserServerAccess = userData[0];
+        if (!user.servers.find((server) => server.id === server_id)) {
+            return e.json(
+                {
+                    status: 400,
+                    message: "You don't have access to this server",
+                },
+                {
+                    status: 400,
+                }
+            );
+        }
         const discordServer = discord.guilds.cache.get(server_id);
         if (!discordServer) return e.json({ error: "Server not found" });
         const channel = discordServer.channels.cache.get(channel_id);
@@ -669,8 +800,8 @@ app.patch("/api/v1/connection", async (e) => {
             ],
         });
     } catch (error) {
-        console_log.error(error);
-        return e.json({ error: "Internal Server Error" }, 500);
+        console.error("Error in /api/v1/connection PATCH:", error?.toString());
+        return e.json({ error: error?.toString() }, { status: 500 });
     }
 });
 app.delete("/api/v1/connection", async (e) => {
@@ -689,7 +820,36 @@ app.delete("/api/v1/connection", async (e) => {
                 }
             );
         }
-        const { server_id, id, type } = body;
+        const { server_id, user_id, id, type } = body;
+        const userData: any = await db
+            .select()
+            .from(userServerAccess)
+            .where(eq(userServerAccess.discord_user_id, user_id))
+            .limit(1)
+            .execute();
+        if (!userData[0]) {
+            return e.json(
+                {
+                    status: 400,
+                    message: "You don't have access to this server",
+                },
+                {
+                    status: 400,
+                }
+            );
+        }
+        const user: IUserServerAccess = userData[0];
+        if (!user.servers.find((server) => server.id === server_id)) {
+            return e.json(
+                {
+                    status: 400,
+                    message: "You don't have access to this server",
+                },
+                {
+                    status: 400,
+                }
+            );
+        }
         const discordServer = discord.guilds.cache.get(server_id);
         if (!discordServer) return e.json({ error: "Server not found" });
         if (type === "twitch") {
@@ -863,8 +1023,8 @@ app.delete("/api/v1/connection", async (e) => {
             ],
         });
     } catch (error) {
-        console_log.error(error);
-        return e.json({ error: "Internal Server Error" }, 500);
+        console.error("Error in /api/v1/connection DELETE:", error?.toString());
+        return e.json({ error: error?.toString() }, { status: 500 });
     }
 });
 app.get("/api/v1/all", async (e) => {
@@ -922,8 +1082,70 @@ app.get("/api/v1/all", async (e) => {
             }
         );
     } catch (error) {
-        console_log.error(error);
-        return e.json({ error: "Internal Server Error" }, 500);
+        console.error("Error in /api/v1/all GET:", error?.toString());
+        return e.json({ error: error?.toString() }, { status: 500 });
+    }
+});
+app.get("/auth/login", (e) => {
+    const url = `https://discord.com/api/oauth2/authorize?client_id=${process.env.DISCORD_CLIENT_ID}&redirect_uri=${process.env.SERVER_URL}/auth/callback&response_type=code&scope=identify%20guilds`;
+    return e.redirect(url);
+});
+app.get("/auth/callback", async (c) => {
+    try {
+        const code = c.req.query().code;
+        if (!code) {
+            return c.json({ error: "No code provided" }, 400);
+        }
+        const response = await fetch(`https://discord.com/api/oauth2/token`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({
+                client_id: process.env.DISCORD_CLIENT_ID || "",
+                client_secret: process.env.DISCORD_CLIENT_SECRET || "",
+                code,
+                grant_type: "authorization_code",
+                redirect_uri: `${process.env.SERVER_URL}/auth/callback`,
+                scope: "identify",
+            }).toString(),
+        });
+        const data = await response.json();
+        const accessToken = data.access_token;
+        const userResult = await fetch("https://discord.com/api/users/@me", {
+            headers: {
+                authorization: `Bearer ${accessToken}`,
+            },
+        });
+        const user = await userResult.json();
+        const guilds = await fetchGuildsWithAdminPermissions(accessToken);
+        const existingUser = await db
+            .select()
+            .from(userServerAccess)
+            .where(eq(userServerAccess.discord_user_id, user.id))
+            .limit(1)
+            .execute();
+        if (existingUser.length > 0) {
+            // User exists, update the servers list
+            await db
+                .update(userServerAccess)
+                .set({
+                    servers: guilds, // Update the servers array
+                })
+                .where(eq(userServerAccess.discord_user_id, user.id)); // Update for this user ID
+        } else {
+            // User does not exist, insert a new record
+            await db.insert(userServerAccess).values({
+                id: crypto.randomUUID(),
+                discord_user_id: user.id,
+                discord_username: user.username,
+                servers: guilds,
+            });
+        }
+        return c.redirect(`https://doras.to/admin/settings/discord`);
+    } catch (error) {
+        console.error("Error in /auth/callback GET:", error?.toString());
+        return c.json({ error: error?.toString() }, { status: 500 });
     }
 });
 serve({
@@ -933,3 +1155,42 @@ serve({
 }).on("listening", () => {
     console_log.colour("Server is running on port 5468", "green");
 });
+const hasAdminPermission = (permissions: number) => {
+    const ADMINISTRATOR_PERMISSION = 0x8; // Bit flag for Administrator permission
+    return (
+        (permissions & ADMINISTRATOR_PERMISSION) === ADMINISTRATOR_PERMISSION
+    );
+};
+const fetchGuildsWithAdminPermissions = async (accessToken: string) => {
+    try {
+        const guildsResponse = await fetch(
+            "https://discord.com/api/v10/users/@me/guilds",
+            {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+            }
+        );
+
+        const guildsData = await guildsResponse.json();
+
+        const guildsWithAdminPerms = guildsData
+            .filter((guild: any) => {
+                if (hasAdminPermission(guild.permissions)) {
+                    return true;
+                }
+                return false;
+            })
+            .map((guild: any) => ({
+                id: guild.id,
+                name: guild.name,
+                owner: guild.owner,
+                permissions: guild.permissions,
+            }));
+
+        return guildsWithAdminPerms;
+    } catch (error) {
+        console.error("Error fetching guilds with admin permissions:", error);
+        return [];
+    }
+};

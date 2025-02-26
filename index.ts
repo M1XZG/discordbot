@@ -16,7 +16,12 @@ import { readdirSync } from "fs";
 import { join } from "path";
 import { db } from "./db";
 import * as schema from "./db/schema";
-import { ITwitch, IYoutubeLatest, IYoutubeLive } from "./types";
+import {
+    ITwitch,
+    IYoutubeLatest,
+    IYoutubeLatestShort,
+    IYoutubeLive,
+} from "./types";
 import { eq } from "drizzle-orm";
 import cron from "node-cron";
 export const AddButtonDataTwitch = new Map();
@@ -692,7 +697,7 @@ const youtubeLatestEmbeds = async (item: IYoutubeLatest, index: number) => {
             fields: [
                 {
                     name: "Views",
-                    value: dataLatest?.views,
+                    value: dataLatest?.views || "0",
                     inline: true,
                 },
                 {
@@ -754,7 +759,7 @@ const youtubeLatestEmbeds = async (item: IYoutubeLatest, index: number) => {
     }
 };
 const youtubeLatestShortEmbeds = async (
-    item: IYoutubeLatest,
+    item: IYoutubeLatestShort,
     index: number
 ) => {
     item.username = item.username.replace("@", "");

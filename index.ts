@@ -57,6 +57,7 @@ discord.on(Events.ClientReady, async () => {
         youtubeLatestEmbedLoop();
         youtubeLatestShortEmbedLoop();
     });
+    // const task = null;
     if (task) {
         console_log.log("Cron job for embeds added successfully!");
     } else {
@@ -132,19 +133,11 @@ const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
             }
         );
         const dataLive = await dataLiveReq.json();
-        if (!dataLive.live && !item.keep_vod) {
-            if (!item.keep_vod && item.message_id) {
-                if (!channel.isTextBased()) return;
-                channel.messages.delete(item.message_id);
-                await db
-                    .update(schema.discordBotTwitch)
-                    .set({
-                        message_id: null,
-                        vod_id: null,
-                    })
-                    .where(eq(schema.discordBotTwitch.id, item.id));
-                return;
-            }
+        if (dataLive.error) {
+            console_log.error(
+                `Twitch Error getting data for ${item.username} ` +
+                    dataLive.message
+            );
             return;
         }
         let embed: any = {
@@ -201,6 +194,28 @@ const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
         if (item.social_links && item.social_link_url)
             buttonLinks && row.addComponents(buttonLinks);
         if (!dataLive.live) {
+            if (!item.keep_vod) {
+                if (item.message_id) {
+                    if (!channel.isTextBased()) return;
+                    await channel.messages
+                        .delete(item.message_id)
+                        .catch((e) => {
+                            console_log.error(
+                                `Twitch ${item.username}: Error deleting message: ` +
+                                    e
+                            );
+                        });
+                    await db
+                        .update(schema.discordBotTwitch)
+                        .set({
+                            message_id: null,
+                            vod_id: null,
+                        })
+                        .where(eq(schema.discordBotTwitch.id, item.id));
+                    return;
+                }
+                return;
+            }
             if (item.vod_id === dataLive.video.live_id) {
                 buttonWatch.setLabel("Watch Vod");
                 buttonWatch.setURL(dataLive.video.url);
@@ -224,7 +239,7 @@ const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                 };
                 if (item.message_id) {
                     if (item.keep_vod) {
-                        channel.messages.edit(item.message_id, {
+                        await channel.messages.edit(item.message_id, {
                             embeds: [embed],
                             components: [row],
                         });
@@ -303,7 +318,7 @@ const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                 }
             });
     } catch (error) {
-        console_log.error(error);
+        console_log.error(`Twitch ${item.username}: catch: ` + error);
         return;
     }
 };
@@ -429,13 +444,25 @@ const youtubeLiveEmbeds = async (item: IYoutubeLive, index: number) => {
             }
         );
         const dataLive = await dataLiveReq.json();
+        if (dataLive.error) {
+            console_log.error(
+                `Youtube Error getting data for ${item.username} ` +
+                    dataLive.message
+            );
+            return;
+        }
         if (!dataLive.live) {
             if (!item.keep_vod || !item.vod_id) {
                 if (item.message_id) {
                     if (!channel.isTextBased()) return;
                     await channel.messages
                         .delete(item.message_id)
-                        .catch(console_log.error);
+                        .catch((e) => {
+                            console_log.error(
+                                `Youtube ${item.username}: Error deleting message: ` +
+                                    e
+                            );
+                        });
                     await db
                         .update(schema.discordBotYoutubeLive)
                         .set({ message_id: null, vod_id: null })
@@ -600,7 +627,7 @@ const youtubeLiveEmbeds = async (item: IYoutubeLive, index: number) => {
                 }
             });
     } catch (error) {
-        console_log.error(error);
+        console_log.error(`Youtube ${item.username}: catch: ` + error);
         return;
     }
 };
@@ -700,7 +727,7 @@ const youtubeLatestEmbeds = async (item: IYoutubeLatest, index: number) => {
             return;
         }
     } catch (error) {
-        console_log.error(error);
+        console_log.error(`Youtube Latest ${item.username}: catch: ` + error);
         return;
     }
 };
@@ -801,7 +828,9 @@ const youtubeLatestShortEmbeds = async (
             return;
         }
     } catch (error) {
-        console_log.error(error);
+        console_log.error(
+            `Youtube Latest Short ${item.username}: catch: ` + error
+        );
         return;
     }
 };

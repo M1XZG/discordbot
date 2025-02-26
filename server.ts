@@ -12,6 +12,7 @@ import {
 import {
     discordBotTwitch,
     discordBotYoutubeLatest,
+    discordBotYoutubeLatestShort,
     discordBotYoutubeLive,
 } from "./db/schema";
 import { and, eq } from "drizzle-orm";
@@ -135,6 +136,10 @@ app.post("/api/v1/get_connections", async (c) => {
         const youtubeLatest = await db.query.discordBotYoutubeLatest.findMany({
             where: (table, { eq }) => eq(table.server_id, server_id),
         });
+        const youtubeLatestShorts =
+            await db.query.discordBotYoutubeLatestShort.findMany({
+                where: (table, { eq }) => eq(table.server_id, server_id),
+            });
 
         // Apply user processing to all data
         return c.json({
@@ -142,6 +147,7 @@ app.post("/api/v1/get_connections", async (c) => {
             youtube: {
                 live: processWithDiscordUser(youtubeLiveStreams),
                 latest: processWithDiscordUser(youtubeLatest),
+                shorts: processWithDiscordUser(youtubeLatestShorts),
             },
         });
     } catch (error) {
@@ -322,6 +328,55 @@ app.post("/api/v1/connection", async (e) => {
                 });
             }
         }
+        if (type === "youtube_latest_short") {
+            const dataLiveReq = await fetch(
+                process.env.API_SERVER +
+                    "/v2/live/youtube/@" +
+                    username?.replace("@", ""),
+                {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                }
+            );
+            const dataLive = await dataLiveReq.json();
+            if (!dataLive?.channel?.id) {
+                return e.json({
+                    status: 400,
+                    message: `User ${username?.replace(
+                        "@",
+                        ""
+                    )} not found on Youtube`,
+                });
+            }
+            const newRow = await db
+                .insert(discordBotYoutubeLatestShort)
+                .values({
+                    id: crypto.randomUUID(),
+                    server_id: server_id,
+                    account_id: account_id,
+                    channel_id: channel_id,
+                    username: username?.replace("@", ""),
+                    youtube_id: dataLive.channel?.id,
+                    social_links: social_links || false,
+                    social_link_url: social_link_url,
+                    message: message,
+                })
+                .returning();
+            if (newRow.length > 0) {
+                return e.json({
+                    status: 200,
+                    message: "Youtube Latest Short connection added",
+                    data: newRow,
+                });
+            } else {
+                return e.json({
+                    status: 500,
+                    message: "Error adding Youtube Latest Short connection",
+                });
+            }
+        }
         return e.json({
             status: 400,
             message: `Invalid key: 'type'. One of the following is required:`,
@@ -340,6 +395,11 @@ app.post("/api/v1/connection", async (e) => {
                     key: "youtube_latest",
                     type: "string",
                     description: "youtube latest connection",
+                },
+                {
+                    key: "youtube_latest_short",
+                    type: "string",
+                    description: "youtube latest short connection",
                 },
             ],
         });
@@ -530,6 +590,58 @@ app.patch("/api/v1/connection", async (e) => {
                 });
             }
         }
+        if (type === "youtube_latest_short") {
+            const dataLiveReq = await fetch(
+                process.env.API_SERVER +
+                    "/v2/live/youtube/@" +
+                    username.replace("@", ""),
+                {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                }
+            );
+            const dataLive = await dataLiveReq.json();
+            if (!dataLive?.channel?.id) {
+                return e.json({
+                    status: 400,
+                    message: `User ${username.replace(
+                        "@",
+                        ""
+                    )} not found on Youtube`,
+                });
+            }
+            const updateRow = await db
+                .update(discordBotYoutubeLatestShort)
+                .set({
+                    channel_id: channel_id,
+                    username: username.replace("@", ""),
+                    youtube_id: dataLive.channel?.id,
+                    message: message,
+                    social_links: social_links || false,
+                    social_link_url: social_link_url,
+                })
+                .where(
+                    and(
+                        eq(discordBotYoutubeLatestShort.id, id),
+                        eq(discordBotYoutubeLatestShort.server_id, server_id)
+                    )
+                )
+                .returning();
+            if (updateRow.length > 0) {
+                return e.json({
+                    status: 200,
+                    message: "Youtube Latest Short connection updated",
+                    data: updateRow,
+                });
+            } else {
+                return e.json({
+                    status: 500,
+                    message: "Error updating Youtube Latest Short connection",
+                });
+            }
+        }
         return e.json({
             status: 400,
             message: `Invalid key: 'type'. One of the following is required:`,
@@ -548,6 +660,11 @@ app.patch("/api/v1/connection", async (e) => {
                     key: "youtube_latest",
                     type: "string",
                     description: "youtube latest connection",
+                },
+                {
+                    key: "youtube_latest_short",
+                    type: "string",
+                    description: "youtube latest short connection",
                 },
             ],
         });
@@ -683,6 +800,42 @@ app.delete("/api/v1/connection", async (e) => {
                 });
             }
         }
+        if (type === "youtube_latest_short") {
+            const getRow = await db
+                .select()
+                .from(discordBotYoutubeLatestShort)
+                .where(
+                    and(
+                        eq(discordBotYoutubeLatestShort.id, id),
+                        eq(discordBotYoutubeLatestShort.server_id, server_id)
+                    )
+                );
+            if (getRow.length === 0) {
+                return e.json({
+                    status: 500,
+                    message: "Youtube Latest Short connection not found",
+                });
+            }
+            const deleteRow = await db
+                .delete(discordBotYoutubeLatestShort)
+                .where(
+                    and(
+                        eq(discordBotYoutubeLatestShort.id, id),
+                        eq(discordBotYoutubeLatestShort.server_id, server_id)
+                    )
+                );
+            if (deleteRow.length === 0) {
+                return e.json({
+                    status: 200,
+                    message: "Youtube Latest Short connection removed",
+                });
+            } else {
+                return e.json({
+                    status: 500,
+                    message: "Error removing Youtube Latest Short connection",
+                });
+            }
+        }
         return e.json({
             status: 400,
             message: `Invalid key: 'type'. One of the following is required:`,
@@ -702,8 +855,72 @@ app.delete("/api/v1/connection", async (e) => {
                     type: "string",
                     description: "youtube latest connection",
                 },
+                {
+                    key: "youtube_latest_short",
+                    type: "string",
+                    description: "youtube latest short connection",
+                },
             ],
         });
+    } catch (error) {
+        console_log.error(error);
+        return e.json({ error: "Internal Server Error" }, 500);
+    }
+});
+app.get("/api/v1/all", async (e) => {
+    try {
+        const twitch = await db.select().from(discordBotTwitch);
+        const youtubeLive = await db.select().from(discordBotYoutubeLive);
+        const youtubeLatest = await db.select().from(discordBotYoutubeLatest);
+        const youtubeLatestShort = await db
+            .select()
+            .from(discordBotYoutubeLatestShort);
+        const servers = Array.from(
+            new Map(
+                (
+                    await Promise.all(
+                        twitch.map(async (server_id) => {
+                            const discordServer = discord.guilds.cache.get(
+                                server_id.server_id
+                            );
+                            return {
+                                server_id: server_id.server_id,
+                                server_name: discordServer?.name,
+                                server_logo:
+                                    discordServer?.iconURL() ||
+                                    getRandomAvatarUrl(),
+                                twitch: twitch.filter(
+                                    (e) => e.server_id === server_id.server_id
+                                ),
+                                youtubeLive: youtubeLive.filter(
+                                    (e) => e.server_id === server_id.server_id
+                                ),
+                                youtubeLatest: youtubeLatest.filter(
+                                    (e) => e.server_id === server_id.server_id
+                                ),
+                                youtubeLatestShort: youtubeLatestShort.filter(
+                                    (e) => e.server_id === server_id.server_id
+                                ),
+                            };
+                        })
+                    )
+                ).map((server) => [server.server_id, server]) // Use Map to ensure unique server_id
+            ).values()
+        );
+        const live = twitch.filter((e) => e.message_id);
+        return e.json(
+            {
+                live,
+                twitch: twitch.length,
+                youtubeLive: youtubeLive.length,
+                youtubeLatest: youtubeLatest.length,
+                youtubeLatestShor: youtubeLatestShort.length,
+                servers,
+            },
+            {
+                status: 200,
+            }
+        );
     } catch (error) {
         console_log.error(error);
         return e.json({ error: "Internal Server Error" }, 500);

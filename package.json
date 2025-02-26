@@ -8,7 +8,8 @@
     "start": "node build/index.js",
     "dev": "nodemon index.ts",
     "build:start": "npx tsc && node build/index.js",
-    "db:push": "npx drizzle-kit push"
+    "db:push": "npx drizzle-kit push",
+    "db:studio": "pnpm drizzle-kit studio"
   },
   "keywords": [],
   "author": "",

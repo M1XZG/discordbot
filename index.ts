@@ -75,6 +75,7 @@ discord.on(Events.ClientReady, async () => {
 });
 import "./events/interactionCreate";
 import "./server";
+import "./public/index.html";
 // run every 10 minutes
 const TwitchEmbedLoop = async () => {
     const servers = await db.query.discordBotTwitch.findMany();

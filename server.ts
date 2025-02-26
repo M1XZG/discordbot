@@ -67,8 +67,8 @@ function getRandomAvatarUrl() {
 }
 app.get("/api/v1/get_all_connections", async (c) => {
     try {
-        const user_id = c.req.header().user_id;
-        if (!user_id) return c.json({ error: "user_id is required" });
+        const user_id = c.req.header()["user-id"];
+        if (!user_id) return c.json({ error: "user-id is required" });
         const userData: any = await db
             .select()
             .from(userServerAccess)

@@ -45,12 +45,12 @@ export default {
             // Send Embed and Button
             await inter.editReply({
                 embeds: [embed],
-                // components: [
-                //     {
-                //         type: 1, // Action Row
-                //         components: [authButton],
-                //     },
-                // ],
+                components: [
+                    {
+                        type: 1, // Action Row
+                        components: [authButton],
+                    },
+                ],
             });
             return;
         } catch (error) {

@@ -237,7 +237,6 @@ const createEventSubSubscription = async (
                     console.error("Response body:", errorBody);
                     return null;
                 }
-                console.log(response.status);
                 return true;
             }
         } catch (error) {

@@ -75,6 +75,13 @@ export default {
                     return;
                 }
                 if (platform === "twitch") {
+                    const check = await db
+                        .select()
+                        .from(schema.discordBotTwitch)
+                        .where(eq(schema.discordBotTwitch.username, username));
+                    if (check.length <= 1) {
+                        await deleteEventSubSubscription(username);
+                    }
                     const data = await db
                         .delete(schema.discordBotTwitch)
                         .where(
@@ -91,13 +98,6 @@ export default {
                             )
                         )
                         .returning();
-                    const check = await db
-                        .select()
-                        .from(schema.discordBotTwitch)
-                        .where(eq(schema.discordBotTwitch.username, username));
-                    if (check.length <= 1) {
-                        await deleteEventSubSubscription(username);
-                    }
                     if (data.length === 0) {
                         await inter.editReply({
                             content: "User not found",

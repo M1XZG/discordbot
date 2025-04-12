@@ -6,6 +6,7 @@ import {
     AddButtonDataYoutubeLive,
     commands,
     discord,
+    twitchLiveEmbeds,
 } from "..";
 import { db } from "../db";
 import * as schema from "../db/schema";
@@ -63,6 +64,7 @@ discord.on(
                                 item.username,
                                 "stream.online"
                             );
+                            await twitchLiveEmbeds(item, -50);
                             if (!eventSub) {
                                 AddButtonDataTwitch.delete(
                                     interaction.message.id

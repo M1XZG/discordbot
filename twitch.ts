@@ -1,7 +1,4 @@
 import fs from "fs";
-import * as dotenv from "dotenv";
-dotenv.config();
-
 interface TwitchToken {
     access_token?: string;
     expires_in?: number;

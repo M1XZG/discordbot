@@ -1,6 +1,6 @@
 function extractFileName(stackTrace: string): string | null {
     const callerLine = stackTrace.split("\n")[2]; // Assuming the caller is in the third line
-    const fileNameMatch = callerLine.match(
+    const fileNameMatch = callerLine?.match(
         /\sat\s(?:.*\()?(.*[\/\\])([^\/\\]+):\d+:\d+\)?$/
     ); // Adjusted regex to capture only file name
     if (fileNameMatch) {

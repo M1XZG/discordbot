@@ -432,7 +432,7 @@ function convertRelativeTimeToUnix(relativeTime: string): number {
         year: 31536000, // Approximate, assuming 365 days
     };
 
-    const match = relativeTime.match(
+    const match = relativeTime?.match(
         /(\d+)\s*(second|minute|hour|day|week|month|year)s?\s*ago/i
     );
 

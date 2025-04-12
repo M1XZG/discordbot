@@ -619,7 +619,13 @@ app.patch("/api/v1/connection", async (e) => {
                     message: `User ${username} not found on Twitch`,
                 });
             }
-            await deleteEventSubSubscription(username);
+            const check = await db
+                .select()
+                .from(discordBotTwitch)
+                .where(eq(discordBotTwitch.username, username));
+            if (check.length <= 1) {
+                await deleteEventSubSubscription(username);
+            }
             await createEventSubSubscription(username, "stream.online");
             const updateRow = await db
                 .update(discordBotTwitch)

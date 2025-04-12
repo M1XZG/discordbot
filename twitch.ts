@@ -45,9 +45,7 @@ class TwitchTokenManager {
     async refreshAccessToken(): Promise<string | null> {
         try {
             const clientId = process.env.TWITCH_CLIENT_ID;
-            console.log("clientId", clientId);
             const clientSecret = process.env.TWITCH_CLIENT_SECRET;
-            console.log("clientSecret", clientSecret);
 
             if (!clientId || !clientSecret) {
                 throw new Error(

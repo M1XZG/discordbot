@@ -47,6 +47,7 @@ class TwitchTokenManager {
             const clientId = process.env.TWITCH_CLIENT_ID;
             console.log("clientId", clientId);
             const clientSecret = process.env.TWITCH_CLIENT_SECRET;
+            console.log("clientSecret", clientSecret);
 
             if (!clientId || !clientSecret) {
                 throw new Error(
@@ -64,7 +65,10 @@ class TwitchTokenManager {
             });
 
             if (!response.ok) {
-                console.log("Token fetch failed, trying again");
+                console.log(
+                    "Token fetch failed, trying again",
+                    await response.json()
+                );
                 const retryResponse = await fetch(tokenUrl, {
                     method: "POST",
                     headers: {

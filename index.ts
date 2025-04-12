@@ -54,16 +54,37 @@ export const discord = new Client({
 const TwitchEmbedLoopStart = async () => {
     const items = await db.query.discordBotTwitch.findMany();
     console_log.log(`Twitch EventSub Processing ${items.length} Users`);
-    for (const [index, item] of items.entries()) {
-        console_log.log(
-            `Twitch EventSub Processing for ${index + 1}: ${item.username}`
-        );
-        await createEventSubSubscription(item.username, "stream.online");
-    }
+
+    const subscriptionPromises = items.map((item, index) =>
+        (async () => {
+            console_log.log(
+                `Twitch EventSub Processing for ${index + 1}: ${item.username}`
+            );
+            try {
+                await createEventSubSubscription(
+                    item.username,
+                    "stream.online"
+                );
+                console_log.log(
+                    `Successfully created EventSub for ${item.username}`
+                ); // More specific log
+            } catch (error) {
+                console_log.error(
+                    `Failed to create EventSub for ${item.username}: ${error}`
+                ); // Log errors
+            }
+            //Rate Limiting (1 second delay)
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+        })()
+    );
+
+    await Promise.all(subscriptionPromises);
+
     console_log.log(
         `Twitch EventSub Finished Processing ${items.length} Users`
     );
 };
+
 discord.login(process.env.DISCORD_TOKEN);
 discord.on(Events.ClientReady, async () => {
     console_log.colour(discord?.user?.username + " bot is ready", "green");

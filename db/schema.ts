@@ -20,6 +20,9 @@ export const discordBotTwitch = pgTable("discord_bot_twitch", {
     mention: text("mention"),
     message: text("message"),
     vod_id: text("vod_id"),
+    live: boolean("live").default(false).notNull(),
+    last_live: text("last_live"),
+    live_started_at: text("live_started_at"),
 });
 
 export const discordBotYoutubeLive = pgTable("discord_bot_youtube_live", {
@@ -34,6 +37,9 @@ export const discordBotYoutubeLive = pgTable("discord_bot_youtube_live", {
     keep_vod: boolean("keep_vod").default(false).notNull(),
     message: text("message"),
     vod_id: text("vod_id"),
+    live: boolean("live").default(false).notNull(),
+    last_live: text("last_live"),
+    live_started_at: text("live_started_at"),
 });
 
 export const discordBotYoutubeLatest = pgTable("discord_bot_youtube_latest", {

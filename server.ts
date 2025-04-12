@@ -1,5 +1,5 @@
 import * as console_log from "./utils/logs";
-import { discord } from ".";
+import { discord, twitchLiveEmbeds } from ".";
 import { Context, Hono } from "hono";
 import { serve } from "@hono/node-server";
 import crypto from "crypto";
@@ -20,6 +20,11 @@ import { and, eq } from "drizzle-orm";
 import path from "path";
 import fs from "fs/promises"; // Use fs.promises for async file reading
 import { IUserServerAccess } from "./types";
+import {
+    createEventSubSubscription,
+    deleteEventSubSubscription,
+    getSecret,
+} from "./twitch";
 //web server
 const baseHeaders = {
     "X-Service-Name": "DorasBot",
@@ -342,10 +347,14 @@ app.post("/api/v1/connection", async (e) => {
                 })
                 .returning();
             if (newRow.length > 0) {
+                await createEventSubSubscription(
+                    newRow[0].username,
+                    "stream.online"
+                );
                 return e.json({
                     status: 200,
                     message: "Twitch connection added",
-                    data: newRow,
+                    data: newRow[0],
                 });
             } else {
                 return e.json({
@@ -610,6 +619,8 @@ app.patch("/api/v1/connection", async (e) => {
                     message: `User ${username} not found on Twitch`,
                 });
             }
+            await deleteEventSubSubscription(username);
+            await createEventSubSubscription(username, "stream.online");
             const updateRow = await db
                 .update(discordBotTwitch)
                 .set({
@@ -891,6 +902,7 @@ app.delete("/api/v1/connection", async (e) => {
                     message: "Twitch connection not found",
                 });
             }
+            await deleteEventSubSubscription(getRow[0].username);
             const deleteRow = await db
                 .delete(discordBotTwitch)
                 .where(
@@ -1113,6 +1125,9 @@ app.get("/auth/login", (e) => {
     const url = `https://discord.com/api/oauth2/authorize?client_id=${process.env.DISCORD_CLIENT_ID}&redirect_uri=${process.env.SERVER_URL}/auth/callback&response_type=code&scope=identify%20guilds`;
     return e.redirect(url);
 });
+app.post("/twitch/callback", async (c) => {
+    return twitchCallbackHandler(c);
+});
 app.get("/auth/callback", async (c) => {
     try {
         const code = c.req.query().code;
@@ -1215,5 +1230,116 @@ const fetchGuildsWithAdminPermissions = async (accessToken: string) => {
     } catch (error) {
         console.error("Error fetching guilds with admin permissions:", error);
         return [];
+    }
+};
+
+const TWITCH_MESSAGE_ID = "Twitch-Eventsub-Message-Id";
+const TWITCH_MESSAGE_TIMESTAMP = "Twitch-Eventsub-Message-Timestamp";
+const TWITCH_MESSAGE_SIGNATURE = "Twitch-Eventsub-Message-Signature";
+const MESSAGE_TYPE = "Twitch-Eventsub-Message-Type";
+
+const MESSAGE_TYPE_VERIFICATION = "webhook_callback_verification";
+const MESSAGE_TYPE_NOTIFICATION = "notification";
+const MESSAGE_TYPE_REVOCATION = "revocation";
+
+const HMAC_PREFIX = "sha256=";
+
+const getHmacMessage = (
+    messageId: string,
+    messageTimestamp: string,
+    rawBody: string
+): string => {
+    if (!messageId || !messageTimestamp) {
+        throw new Error("Missing required headers for HMAC verification.");
+    }
+    // Need the entire raw body, so read it using req.text()
+    return messageId + messageTimestamp + rawBody;
+};
+
+const getHmac = (secret: string, message: string): string => {
+    const hmac = crypto
+        .createHmac("sha256", secret)
+        .update(message)
+        .digest("hex");
+
+    return hmac;
+};
+
+const verifyMessage = (hmac: string, signature: string | null): boolean => {
+    if (!signature) {
+        console.warn("No signature header found");
+        return false;
+    }
+    return hmac === signature;
+};
+export const twitchCallbackHandler = async (c: Context) => {
+    try {
+        const req = c.req.raw; // Get the raw Request object
+        const secret = getSecret();
+        // Read the raw body BEFORE parsing as JSON (critical for HMAC verification)
+        const rawBody = await c.req.text();
+        const messageId = req.headers.get(TWITCH_MESSAGE_ID) ?? "";
+        const messageTimestamp =
+            req.headers.get(TWITCH_MESSAGE_TIMESTAMP) ?? "";
+        const message = getHmacMessage(messageId, messageTimestamp, rawBody); //rawBody is read inside here
+        const hmac = HMAC_PREFIX + getHmac(secret, message); // Signature to compare
+        const signature = req.headers.get(TWITCH_MESSAGE_SIGNATURE);
+        if (verifyMessage(hmac, signature)) {
+            const messageType = req.headers.get(MESSAGE_TYPE);
+            const notification = JSON.parse(rawBody);
+            if (messageType === MESSAGE_TYPE_NOTIFICATION) {
+                if (notification.subscription.type === "stream.online") {
+                    const items = await db
+                        .select()
+                        .from(discordBotTwitch)
+                        .where(
+                            eq(
+                                discordBotTwitch.username,
+                                notification.event.broadcaster_user_login.toLowerCase()
+                            )
+                        )
+                        .execute();
+                    setTimeout(async () => {
+                        for (const [index, item] of items.entries()) {
+                            await twitchLiveEmbeds(item, index);
+                        }
+                    }, 5000);
+                }
+                c.status(204);
+                return c.text(""); // Send a 204 No Content
+            } else if (messageType === MESSAGE_TYPE_VERIFICATION) {
+                c.header("Content-Type", "text/plain");
+                c.status(200);
+                return c.text(notification.challenge);
+            } else if (messageType === MESSAGE_TYPE_REVOCATION) {
+                c.status(204);
+                console.log(
+                    `${notification.subscription.type} notifications revoked!`
+                );
+                console.log(`reason: ${notification.subscription.status}`);
+                console.log(
+                    `condition: ${JSON.stringify(
+                        notification.subscription.condition,
+                        null,
+                        4
+                    )}`
+                );
+                return c.text(""); // Send a 204 No Content
+            } else {
+                c.status(204);
+                console.log(
+                    `Unknown message type: ${req.headers.get(MESSAGE_TYPE)}`
+                );
+                return c.text(""); // Send a 204 No Content
+            }
+        } else {
+            console.log("403"); // Signatures didn't match.
+            c.status(403);
+            return c.text("Signature verification failed");
+        }
+    } catch (error) {
+        console.error("Error processing Twitch callback:", error);
+        c.status(500);
+        return c.json({ error: "Internal server error" });
     }
 };

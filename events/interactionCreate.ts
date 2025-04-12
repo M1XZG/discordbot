@@ -10,6 +10,7 @@ import {
 import { db } from "../db";
 import * as schema from "../db/schema";
 import { randomUUID } from "crypto";
+import { createEventSubSubscription } from "../twitch";
 discord.on(
     Events.InteractionCreate,
     async (interaction: Interaction): Promise<any> => {
@@ -57,6 +58,17 @@ discord.on(
                                 content: `${data.username} has been added to the database.`,
                                 ephemeral: true,
                             });
+                            const item = dataDB[0];
+                            const eventSub = await createEventSubSubscription(
+                                item.username,
+                                "stream.online"
+                            );
+                            if (!eventSub) {
+                                AddButtonDataTwitch.delete(
+                                    interaction.message.id
+                                );
+                                return;
+                            }
                             AddButtonDataTwitch.delete(interaction.message.id);
                         }
                         break;

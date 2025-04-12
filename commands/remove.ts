@@ -7,6 +7,7 @@ import {
 import { db } from "../db";
 import * as schema from "../db/schema";
 import { and, eq } from "drizzle-orm";
+import { deleteEventSubSubscription } from "../twitch";
 export default {
     data: new SlashCommandBuilder()
         .setName("remove")
@@ -90,6 +91,7 @@ export default {
                             )
                         )
                         .returning();
+                    await deleteEventSubSubscription(username);
                     if (data.length === 0) {
                         await inter.editReply({
                             content: "User not found",

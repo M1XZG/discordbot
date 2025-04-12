@@ -51,16 +51,28 @@ export const discord = new Client({
         Partials.GuildScheduledEvent,
     ],
 });
-
+const TwitchEmbedLoopStart = async () => {
+    const items = await db.query.discordBotTwitch.findMany();
+    console_log.log(`Twitch EventSub Processing ${items.length} Users`);
+    for (const [index, item] of items.entries()) {
+        console_log.log(
+            `Twitch EventSub Processing for ${index + 1}: ${item.username}`
+        );
+        await createEventSubSubscription(item.username, "stream.online");
+    }
+    console_log.log(
+        `Twitch EventSub Finished Processing ${items.length} Users`
+    );
+};
 discord.login(process.env.DISCORD_TOKEN);
 discord.on(Events.ClientReady, async () => {
     console_log.colour(discord?.user?.username + " bot is ready", "green");
     await registerSlashCommands();
-    const task = cron.schedule("*/10 * * * *", () => {
-        TwitchEmbedLoop();
-        youtubeLiveEmbedLoop();
-        youtubeLatestEmbedLoop();
-        youtubeLatestShortEmbedLoop();
+    const task = cron.schedule("*/10 * * * *", async () => {
+        await TwitchEmbedLoop();
+        await youtubeLiveEmbedLoop();
+        await youtubeLatestEmbedLoop();
+        await youtubeLatestShortEmbedLoop();
     });
     // const task = null;
     if (task) {
@@ -72,23 +84,56 @@ discord.on(Events.ClientReady, async () => {
         name: "Watching doras.to",
         type: ActivityType.Custom,
     });
+    if (process.env.TWITCH_EVENTSUB == "true") {
+        console_log.log("Twitch EventSub Enabled");
+        await TwitchEmbedLoopStart();
+    }
 });
 import "./events/interactionCreate";
 import "./server";
+import { createEventSubSubscription } from "./twitch";
+import { discordBotTwitch } from "./db/schema";
 // run every 10 minutes
 const TwitchEmbedLoop = async () => {
-    const servers = await db.query.discordBotTwitch.findMany();
-    console_log.log(`Twitch Embeds Processing ${servers.length} Users`);
-    for (const [index, item] of servers.entries()) {
-        await twitchLiveEmbeds(item, index);
+    if (process.env.TWITCH_EVENTSUB == "true") {
+        console_log.log("Twitch embed check eventsub");
+        const servers = await db
+            .select()
+            .from(discordBotTwitch)
+            .where(eq(discordBotTwitch.live, true))
+            .execute();
+        console_log.log(
+            `Twitch Embeds Processing ${servers.length} Live Users`
+        );
+        for (const [index, item] of servers.entries()) {
+            try {
+                await twitchLiveEmbeds(item, index);
+            } catch (error) {
+                console.error(`Error processing ${item.username}:`, error);
+            }
+        }
+        console_log.log(
+            `Twitch Embeds Finished Processing ${servers.length} Live Users`
+        );
+    } else {
+        const servers = await db.query.discordBotTwitch.findMany();
+        console_log.log(`Twitch Embeds Processing ${servers.length} Users`);
+        for (const [index, item] of servers.entries()) {
+            try {
+                await twitchLiveEmbeds(item, index);
+            } catch (error) {
+                console.error(`Error processing ${item.username}:`, error);
+            }
+        }
+        console_log.log(
+            `Twitch Embeds Finished Processing ${servers.length} Users`
+        );
     }
-    console_log.log(
-        `Twitch Embeds Finished Processing ${servers.length} Users`
-    );
 };
 const youtubeLiveEmbedLoop = async () => {
     const servers = await db.query.discordBotYoutubeLive.findMany();
     console_log.log(`Youtube Live Embeds Processing ${servers.length} Users`);
+    servers.sort((a, b) => (b.live === a.live ? 0 : b.live ? 1 : -1));
     for (const [index, item] of servers.entries()) {
         await youtubeLiveEmbeds(item, index);
     }
@@ -118,7 +163,7 @@ const youtubeLatestShortEmbedLoop = async () => {
         `Youtube Latest Short Embeds Finished Processing ${servers.length} Users`
     );
 };
-const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
+export const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
     console_log.log(
         `Processed Twitch Live Embed for ${index + 1}: ${item.username}`
     );
@@ -228,6 +273,9 @@ const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                         .set({
                             message_id: null,
                             vod_id: null,
+                            live: false,
+                            last_live: new Date().toISOString(),
+                            live_started_at: null,
                         })
                         .where(eq(schema.discordBotTwitch.id, item.id));
                     return;
@@ -269,6 +317,9 @@ const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                     .set({
                         message_id: null,
                         vod_id: null,
+                        live: false,
+                        last_live: new Date().toISOString(),
+                        live_started_at: null,
                     })
                     .where(eq(schema.discordBotTwitch.id, item.id));
                 return;
@@ -278,6 +329,9 @@ const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                     .set({
                         message_id: null,
                         vod_id: null,
+                        live: false,
+                        last_live: new Date().toISOString(),
+                        live_started_at: null,
                     })
                     .where(eq(schema.discordBotTwitch.id, item.id));
                 return;
@@ -314,6 +368,8 @@ const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                     .set({
                         message_id: message.id,
                         vod_id: dataLive.id,
+                        live: true,
+                        live_started_at: dataLive.started_at,
                     })
                     .where(eq(schema.discordBotTwitch.id, item.id));
                 return;
@@ -363,33 +419,6 @@ function formatViewersCount(count: number): string {
 function isoToUnix(isoString: string): number {
     // Parse the ISO 8601 string and convert it to a Unix timestamp in seconds
     return Math.floor(new Date(isoString).getTime() / 1000);
-}
-
-function timeDifference(startedAt: string | Date): string {
-    const startDate = new Date(startedAt);
-    const now = new Date();
-    const timeDifference = now.getTime() - startDate.getTime(); // Difference in milliseconds
-
-    let remainingTime = timeDifference;
-
-    const days = Math.floor(remainingTime / (1000 * 60 * 60 * 24));
-    remainingTime -= days * (1000 * 60 * 60 * 24);
-
-    const hours = Math.floor(remainingTime / (1000 * 60 * 60));
-    remainingTime -= hours * (1000 * 60 * 60);
-
-    const minutes = Math.floor(remainingTime / (1000 * 60));
-    remainingTime -= minutes * (1000 * 60);
-
-    const seconds = Math.floor(remainingTime / 1000);
-
-    let result = "";
-    if (days > 0) result += `${days}d`;
-    if (hours > 0) result += `${hours}h`;
-    if (minutes > 0) result += `${minutes}m`;
-    if (seconds > 0) result += `${seconds}s`;
-
-    return result.trim(); // Remove any trailing space
 }
 function convertRelativeTimeToUnix(relativeTime: string): number {
     const now = Math.floor(Date.now() / 1000); // Current Unix timestamp in seconds
@@ -492,7 +521,13 @@ const youtubeLiveEmbeds = async (item: IYoutubeLive, index: number) => {
                         });
                     await db
                         .update(schema.discordBotYoutubeLive)
-                        .set({ message_id: null, vod_id: null })
+                        .set({
+                            message_id: null,
+                            vod_id: null,
+                            live: false,
+                            last_live: new Date().toISOString(),
+                            live_started_at: null,
+                        })
                         .where(eq(schema.discordBotYoutubeLive.id, item.id));
                 }
                 return; // Exit early when not live and no valid VOD
@@ -541,43 +576,57 @@ const youtubeLiveEmbeds = async (item: IYoutubeLive, index: number) => {
                         "https://doras.to/" + item.social_link_url || ""
                     )) ||
             "";
-        if (item.social_links && item.social_link_url)
+        if (item.social_links && item.social_link_url) {
             buttonLinks && row.addComponents(buttonLinks);
+        }
+        const isNotLive = !dataLive.live;
+        const isNotVod = !item.vod_id;
+        const hasMessageId = !!item.message_id;
+        const vodIdMismatch =
+            item.vod_id !== null && item.vod_id !== dataLive.url;
         if (
-            (!dataLive.live && !item.vod_id && item.message_id) ||
-            (item.vod_id !== null &&
-                item.vod_id !== dataLive.url &&
-                item.message_id)
+            (isNotLive && isNotVod && hasMessageId) ||
+            (vodIdMismatch && hasMessageId && isNotLive)
         ) {
             const vod = dataLive.vods.find(
                 (v: any) => v.video_id === item.vod_id
             );
             if (!vod) {
-                if (!channel.isTextBased()) return;
                 buttonWatch.setLabel("Watch Vod");
                 buttonWatch.setURL(
                     `https://www.youtube.com/watch?v=${item.vod_id}`
                 );
                 if (item.message_id) {
                     if (item.keep_vod) {
-                        channel.messages.edit(item.message_id, {
-                            content: item.message,
-                            components: [row],
-                        });
+                        try {
+                            if (!channel.isTextBased()) return;
+                            await channel.messages.edit(item.message_id, {
+                                content: item.message,
+                                components: [row],
+                            });
+                        } catch (error) {
+                            console.error("Error editing message:", error);
+                        }
                     }
                 }
-                await db
-                    .update(schema.discordBotYoutubeLive)
-                    .set({
-                        message_id: null,
-                        vod_id: null,
-                    })
-                    .where(eq(schema.discordBotYoutubeLive.id, item.id));
+                try {
+                    await db
+                        .update(schema.discordBotYoutubeLive)
+                        .set({
+                            message_id: null,
+                            vod_id: null,
+                            live: false,
+                            last_live: new Date().toISOString(),
+                            live_started_at: null,
+                        })
+                        .where(eq(schema.discordBotYoutubeLive.id, item.id));
+                } catch (error) {
+                    console.error("Error updating database:", error);
+                }
                 return;
             }
             buttonWatch.setLabel("Watch Vod");
             buttonWatch.setURL(vod.link);
-            if (!channel.isTextBased()) return;
             embed.url = vod.link;
             embed.title = vod.title;
             embed.author = {
@@ -597,20 +646,32 @@ const youtubeLiveEmbeds = async (item: IYoutubeLive, index: number) => {
             };
             if (item.message_id) {
                 if (item.keep_vod) {
-                    channel.messages.edit(item.message_id, {
-                        content: item.message,
-                        embeds: [embed],
-                        components: [row],
-                    });
+                    try {
+                        if (!channel.isTextBased()) return;
+                        await channel.messages.edit(item.message_id, {
+                            content: item.message,
+                            embeds: [embed],
+                            components: [row],
+                        });
+                    } catch (error) {
+                        console.error("Error editing message:", error);
+                    }
                 }
             }
-            await db
-                .update(schema.discordBotYoutubeLive)
-                .set({
-                    message_id: null,
-                    vod_id: null,
-                })
-                .where(eq(schema.discordBotYoutubeLive.id, item.id));
+            try {
+                await db
+                    .update(schema.discordBotYoutubeLive)
+                    .set({
+                        message_id: null,
+                        vod_id: null,
+                        live: false,
+                        last_live: new Date().toISOString(),
+                        live_started_at: null,
+                    })
+                    .where(eq(schema.discordBotYoutubeLive.id, item.id));
+            } catch (error) {
+                console.error("Error updating database:", error);
+            }
             return;
         }
         if (!channel.isTextBased()) return;
@@ -626,6 +687,8 @@ const youtubeLiveEmbeds = async (item: IYoutubeLive, index: number) => {
                     .set({
                         message_id: message.id,
                         vod_id: dataLive.url,
+                        live: true,
+                        live_started_at: new Date().toISOString(),
                     })
                     .where(eq(schema.discordBotYoutubeLive.id, item.id));
                 return;
@@ -650,6 +713,7 @@ const youtubeLiveEmbeds = async (item: IYoutubeLive, index: number) => {
                         .set({
                             message_id: message.id,
                             vod_id: dataLive.url,
+                            live: true,
                         })
                         .where(eq(schema.discordBotYoutubeLive.id, item.id));
                     return;

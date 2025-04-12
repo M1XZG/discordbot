@@ -799,7 +799,7 @@ const youtubeLatestEmbeds = async (item: IYoutubeLatest, index: number) => {
                 {
                     name: "Uploaded",
                     value: `<t:${convertRelativeTimeToUnix(
-                        dataLatest?.published
+                        dataLatest?.published || ""
                     )}:R>`,
                 },
             ],
@@ -903,7 +903,7 @@ const youtubeLatestShortEmbeds = async (
                 {
                     name: "Uploaded",
                     value: `<t:${convertRelativeTimeToUnix(
-                        dataLatest?.published
+                        dataLatest?.published || ""
                     )}:R>`,
                 },
             ],

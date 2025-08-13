@@ -28,9 +28,7 @@
     "postgres": "^3.4.4",
     "ts-node": "^10.9.2",
     "tslib": "^2.6.3",
-    "typescript": "^5.5.3"
-  },
-  "devDependencies": {
+    "typescript": "^5.5.3",
     "drizzle-kit": "^0.23.0"
   },
   "packageManager": "pnpm@9.6.0"

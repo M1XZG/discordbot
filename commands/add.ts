@@ -14,7 +14,9 @@ import {
     AddButtonDataYoutubeLive,
     AddButtonDataYoutubeLatest,
     AddButtonDataYoutubeLatestShort,
+    AddButtonDataKick,
 } from "..";
+import platforms from "../platforms";
 export default {
     data: new SlashCommandBuilder()
         .setName("add")
@@ -23,12 +25,7 @@ export default {
             option
                 .setName("platform")
                 .setDescription("Choose the platform")
-                .addChoices([
-                    { name: "Twitch", value: "twitch" },
-                    { name: "YouTube Live", value: "youtube-live" },
-                    { name: "YouTube Latest", value: "youtube-latest" },
-                    { name: "Youtube Short", value: "youtube-short-latest" },
-                ])
+                .addChoices(platforms)
                 .setRequired(true)
         )
         .addStringOption((option) =>
@@ -73,7 +70,7 @@ export default {
             try {
                 if (platform === "twitch") {
                     const dataLiveReq = await fetch(
-                        process.env.API_SERVER + "/v2/live/twitch/" + username,
+                        process.env.API_SERVER_LIVE + "/twitch/" + username,
                         {
                             method: "GET",
                             headers: {
@@ -128,10 +125,67 @@ export default {
                     });
                     return;
                 }
+                if (platform === "kick") {
+                    const dataLiveReq = await fetch(
+                        process.env.API_SERVER_LIVE + "/kick/" + username,
+                        {
+                            method: "GET",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                        }
+                    );
+                    const dataLive = await dataLiveReq.json();
+                    if (!dataLive?.user?.username) {
+                        return await inter.editReply({
+                            content: `User ${username} not found on Kick`,
+                        });
+                    }
+                    const embed = new EmbedBuilder();
+                    embed.setTitle(`${dataLive.user.username}`);
+                    embed.setURL(`https://kick.com/${username}`);
+                    embed.setAuthor({
+                        name: "Doras Bot",
+                        iconURL: discord.user?.avatarURL() || "",
+                    });
+                    embed.setColor(0x53fc18);
+                    embed.setDescription(
+                        `${username} added by ${inter.user.username}`
+                    );
+                    embed.setImage(dataLive.user.profile_image);
+                    embed.setTimestamp();
+                    let buttonAccept = new ButtonBuilder();
+                    buttonAccept.setCustomId("accept-kick");
+                    buttonAccept.setLabel("Accept");
+                    buttonAccept.setStyle(ButtonStyle.Success);
+                    let buttonReject = new ButtonBuilder();
+                    buttonReject.setCustomId("reject-kick");
+                    buttonReject.setLabel("Reject");
+                    buttonReject.setStyle(ButtonStyle.Danger);
+                    const row = new ActionRowBuilder().addComponents(
+                        buttonAccept,
+                        buttonReject
+                    );
+                    const data = await inter.editReply({
+                        embeds: [embed],
+                        //@ts-expect-error
+                        components: [row],
+                    });
+                    AddButtonDataKick.set(data.id, {
+                        username: username,
+                        channel: channel?.id || "",
+                        server: inter.guild?.id || "",
+                        account: inter.user.id,
+                        keep_vod: keep_vod || false,
+                        mention: null,
+                        message: message || null,
+                    });
+                    return;
+                }
                 if (platform === "youtube-live") {
                     const dataLiveReq = await fetch(
-                        process.env.API_SERVER +
-                            "/v2/live/youtube/@" +
+                        process.env.API_SERVER_LIVE +
+                            "/youtube/@" +
                             username?.replace("@", ""),
                         {
                             method: "GET",
@@ -196,8 +250,8 @@ export default {
                 }
                 if (platform === "youtube-latest") {
                     const dataLiveReq = await fetch(
-                        process.env.API_SERVER +
-                            "/v2/live/youtube/@" +
+                        process.env.API_SERVER_LIVE +
+                            "/youtube/@" +
                             username?.replace("@", ""),
                         {
                             method: "GET",
@@ -261,8 +315,8 @@ export default {
                 }
                 if (platform === "youtube-short-latest") {
                     const dataLiveReq = await fetch(
-                        process.env.API_SERVER +
-                            "/v2/live/youtube/@" +
+                        process.env.API_SERVER_LIVE +
+                            "/youtube/@" +
                             username?.replace("@", ""),
                         {
                             method: "GET",

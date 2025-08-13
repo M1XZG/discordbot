@@ -6,6 +6,7 @@ import {
 import { db } from "../db";
 import * as schema from "../db/schema";
 import { eq } from "drizzle-orm";
+import platforms from "../platforms";
 export default {
     data: new SlashCommandBuilder()
         .setName("list")
@@ -15,12 +16,7 @@ export default {
             option
                 .setName("platform")
                 .setDescription("Choose the platform")
-                .addChoices([
-                    { name: "Twitch", value: "twitch" },
-                    { name: "YouTube Live", value: "youtube-live" },
-                    { name: "YouTube Latest", value: "youtube-latest" },
-                    { name: "Youtube Short", value: "youtube-short-latest" },
-                ])
+                .addChoices(platforms)
                 .setRequired(true)
         ),
     async execute(inter: ChatInputCommandInteraction) {
@@ -65,6 +61,48 @@ export default {
                     };
                     i == 0
                         ? (embed.description = `Total Twitch accounts: ${users.length}`)
+                        : "",
+                        embeds.push(embed);
+                }
+                if (embeds.length === 0) {
+                    await inter.editReply({
+                        content: "No users found",
+                    });
+                    return;
+                }
+                await inter.editReply({
+                    embeds: embeds.slice(0, 10),
+                });
+                return;
+            }
+            if (platform === "kick") {
+                const users = await db
+                    .select()
+                    .from(schema.discordBotKick)
+                    .where(eq(schema.discordBotKick.server_id, inter.guildId));
+                if (users.length === 0) {
+                    await inter.editReply({
+                        content: "No users found",
+                    });
+                    return;
+                }
+                const embeds = [];
+                const chunkSize = 25;
+                for (let i = 0; i < users.length; i += chunkSize) {
+                    const chunk = users.slice(i, i + chunkSize);
+                    let embed: any = {
+                        color: parseInt("53fc18", 16),
+                        title: "List of Kick users",
+                        fields: chunk.map((user) => ({
+                            name: `${user.username} added by`,
+                            value: `<@${user.account_id}> used in <#${user.channel_id}>`,
+                        })),
+                        thumbnail: {
+                            url: "https://cdn.doras.to/doras/kick-streaming-platform-logo-icon.png",
+                        },
+                    };
+                    i == 0
+                        ? (embed.description = `Total Kick accounts: ${users.length}`)
                         : "",
                         embeds.push(embed);
                 }

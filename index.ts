@@ -254,24 +254,26 @@ const youtubeLatestShortEmbedLoop = async () => {
     );
 };
 export const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
+    console_log.log(`Entering twitchLiveEmbeds for ${item.username} (index: ${index})`);
     console_log.log(
         `Processed Twitch Live Embed for ${index + 1}: ${item.username}`
     );
     const discordServer = discord.guilds.cache.get(item.server_id);
     if (!discordServer) {
         console_log.error(
-            `Discord Server not found for ${item.username} server: ${item.server_id}`
+            `Discord Server not found for ${item.username} server: ${item.server_id}. Skipping embed processing.`
         );
         return;
     }
     const channel = discordServer.channels.cache.get(item.channel_id);
     if (!channel) {
         console_log.error(
-            `Discord Channel not found for ${item.username} server: ${item.server_id}`
+            `Discord Channel not found for ${item.username} server: ${item.server_id}. Skipping embed processing.`
         );
         return;
     }
     try {
+        console_log.log(`Fetching live data for ${item.username} from ${process.env.API_SERVER_LIVE}/twitch/${item.username}`);
         const dataLiveReq = await fetch(
             process.env.API_SERVER_LIVE + "/twitch/" + item.username,
             {
@@ -282,11 +284,11 @@ export const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                 },
             }
         );
+        console_log.log(`Received API response for ${item.username} with status: ${dataLiveReq.status}`);
         const dataLive = await dataLiveReq.json();
         if (dataLive.error) {
             console_log.error(
-                `Twitch Error getting data for ${item.username} ` +
-                    dataLive.message
+                `Twitch Error getting data for ${item.username}: ${dataLive.message}`
             );
             return;
         }
@@ -462,6 +464,7 @@ export const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                         live_started_at: dataLive.started_at,
                     })
                     .where(eq(schema.discordBotTwitch.id, item.id));
+                console_log.log(`Twitch Live Embed sent message with Guild ID: ${item.server_id}, Channel ID: ${item.channel_id}, Message ID: ${message.id}`);
                 return;
             }
             return;
@@ -1052,6 +1055,7 @@ const youtubeLiveEmbeds = async (item: IYoutubeLive, index: number) => {
                         live_started_at: new Date().toISOString(),
                     })
                     .where(eq(schema.discordBotYoutubeLive.id, item.id));
+                console_log.log(`Youtube Live Embed sent message with Guild ID: ${item.server_id}, Channel ID: ${item.channel_id}, Message ID: ${message.id}`);
                 return;
             }
             return;

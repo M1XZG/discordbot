@@ -273,7 +273,6 @@ export const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
         return;
     }
     try {
-        console_log.log(`Fetching live data for ${item.username} from ${process.env.API_SERVER_LIVE}/twitch/${item.username}`);
         const dataLiveReq = await fetch(
             process.env.API_SERVER_LIVE + "/twitch/" + item.username,
             {
@@ -284,12 +283,8 @@ export const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                 },
             }
         );
-        console_log.log(`Received API response for ${item.username} with status: ${dataLiveReq.status}`);
         const dataLive = await dataLiveReq.json();
         if (dataLive.error) {
-            console_log.error(
-                `Twitch Error getting data for ${item.username}: ${dataLive.message}`
-            );
             return;
         }
         let embed: any = {
@@ -357,7 +352,7 @@ export const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                         .catch((e) => {
                             console_log.error(
                                 `Twitch ${item.username}: Error deleting message: ` +
-                                    e
+                                e
                             );
                         });
                     await db
@@ -492,6 +487,8 @@ export const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                     return;
                 }
             });
+        console_log.log(`Twitch Live Embed edited message with Guild ID: ${item.server_id}, Channel ID: ${item.channel_id}, Message ID: ${item.message_id}`);
+
     } catch (error) {
         console.log(error);
         console_log.error(`Twitch ${item.username}: catch: ` + error);
@@ -531,7 +528,7 @@ export const kickLiveEmbeds = async (item: IKick, index: number) => {
         if (dataLive.error) {
             console_log.error(
                 `Kick Error getting data for ${item.username} ` +
-                    dataLive.message
+                dataLive.message
             );
             return;
         }
@@ -600,7 +597,7 @@ export const kickLiveEmbeds = async (item: IKick, index: number) => {
                         .catch((e) => {
                             console_log.error(
                                 `Kick ${item.username}: Error deleting message: ` +
-                                    e
+                                e
                             );
                         });
                     await db
@@ -867,7 +864,7 @@ const youtubeLiveEmbeds = async (item: IYoutubeLive, index: number) => {
         if (dataLive.error) {
             console_log.error(
                 `Youtube Error getting data for ${item.username} ` +
-                    dataLive.message
+                dataLive.message
             );
             return;
         }
@@ -880,7 +877,7 @@ const youtubeLiveEmbeds = async (item: IYoutubeLive, index: number) => {
                         .catch((e) => {
                             console_log.error(
                                 `Youtube ${item.username}: Error deleting message: ` +
-                                    e
+                                e
                             );
                         });
                     await db
@@ -1084,6 +1081,7 @@ const youtubeLiveEmbeds = async (item: IYoutubeLive, index: number) => {
                     return;
                 }
             });
+        console_log.log(`Youtube Live Embed edited message with Guild ID: ${item.server_id}, Channel ID: ${item.channel_id}, Message ID: ${item.message_id}`);
     } catch (error) {
         console.log(error);
         console_log.error(`Youtube ${item.username}: catch: ` + error);
@@ -1202,8 +1200,7 @@ const youtubeLatestShortEmbeds = async (
 ) => {
     item.username = item.username.replace("@", "");
     console_log.log(
-        `Processed Youtube Latest short Embed for ${index + 1}: ${
-            item.username
+        `Processed Youtube Latest short Embed for ${index + 1}: ${item.username
         }`
     );
     const discordServer = discord.guilds.cache.get(item.server_id);

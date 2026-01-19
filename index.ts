@@ -254,22 +254,25 @@ const youtubeLatestShortEmbedLoop = async () => {
     );
 };
 export const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
-    console_log.log(`Entering twitchLiveEmbeds for ${item.username} (index: ${index})`);
+    const logger = console_log.createReqLogger("TWITCH", {
+        user: item.username,
+        guild: item.server_id,
+        channel: item.channel_id,
+        index,
+    });
+    logger.log("START request");
     const discordServer = discord.guilds.cache.get(item.server_id);
     if (!discordServer) {
-        console_log.error(
-            `Discord Server not found for ${item.username} server: ${item.server_id}. Skipping embed processing.`
-        );
+        logger.error("Guild not found, aborting");
         return;
     }
     const channel = discordServer.channels.cache.get(item.channel_id);
     if (!channel) {
-        console_log.error(
-            `Discord Channel not found for ${item.username} server: ${item.server_id}. Skipping embed processing.`
-        );
+        logger.error("Channel not found, aborting");
         return;
     }
     try {
+        logger.log("Fetching live data");
         const dataLiveReq = await fetch(
             process.env.API_SERVER_LIVE + "/twitch/" + item.username,
             {
@@ -282,8 +285,12 @@ export const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
         );
         const dataLive = await dataLiveReq.json();
         if (dataLive.error) {
+            logger.warn("API returned error, skipping");
             return;
         }
+        logger.log(
+            `Status: ${dataLive.live ? "LIVE" : "OFFLINE"}`
+        );
         let embed: any = {
             color: parseInt("a970ff", 16),
             url: `https://www.twitch.tv/${item.username.toLowerCase()}`,
@@ -341,9 +348,12 @@ export const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
         if (item.social_links && item.social_link_url)
             buttonLinks && row.addComponents(buttonLinks);
         if (!dataLive.live) {
+            logger.log("User is offline");
             if (!item.keep_vod) {
+                logger.log("keep_vod disabled");
                 if (item.message_id) {
                     if (!channel.isTextBased()) return;
+                    logger.log("Deleting existing message");
                     await channel.messages
                         .delete(item.message_id)
                         .catch((e) => {
@@ -362,11 +372,17 @@ export const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                             live_started_at: null,
                         })
                         .where(eq(schema.discordBotTwitch.id, item.id));
+                    logger.log("DB updated → offline state");
+                    logger.log("END request");
                     return;
                 }
                 return;
             }
+            logger.log("keep_vod enabled → processing VOD");
             if (item.vod_id === dataLive.video.live_id) {
+                logger.log(
+                    `VOD match confirmed (vod_id=${item.vod_id}) → converting embed to VOD`
+                );
                 buttonWatch.setLabel("Watch Vod");
                 dataLive.video.url &&
                     buttonWatch.setURL(String(dataLive.video.url));
@@ -390,11 +406,15 @@ export const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                 };
                 if (item.message_id) {
                     if (item.keep_vod) {
+                        logger.log(`Editing existing message to VOD (message_id=${item.message_id})`);
                         await channel.messages.edit(item.message_id, {
                             embeds: [embed],
                             components: [row],
                         });
+                        logger.log("VOD message edited successfully");
                     }
+                } else {
+                    logger.warn("No message_id present or keep_vod disabled — VOD not edited");
                 }
                 await db
                     .update(schema.discordBotTwitch)
@@ -406,8 +426,13 @@ export const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                         live_started_at: null,
                     })
                     .where(eq(schema.discordBotTwitch.id, item.id));
+                logger.log("DB updated → stream marked offline, VOD cleared");
+                logger.log("END request (VOD processed)");
                 return;
             } else {
+                logger.log(
+                    `VOD mismatch (expected=${item.vod_id}, received=${dataLive.video.live_id})`
+                );
                 await db
                     .update(schema.discordBotTwitch)
                     .set({
@@ -418,6 +443,8 @@ export const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                         live_started_at: null,
                     })
                     .where(eq(schema.discordBotTwitch.id, item.id));
+                logger.log("DB updated → stream marked offline (no valid VOD)");
+                logger.log("END request (no VOD)");
                 return;
             }
         }
@@ -441,6 +468,7 @@ export const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
             mention = mention ? `<@&${item.mention}> ${message}` : message;
         }
         if (!item.message_id) {
+            logger.log("No message_id → sending new message");
             const message = await channel.send({
                 content: item.message || "",
                 embeds: [embed],
@@ -456,63 +484,91 @@ export const twitchLiveEmbeds = async (item: ITwitch, index: number) => {
                         live_started_at: dataLive.started_at,
                     })
                     .where(eq(schema.discordBotTwitch.id, item.id));
-                console_log.log(`twitchLiveEmbeds sent message with Guild ID: ${item.server_id}, Channel ID: ${item.channel_id}, Message ID: ${message.id} Username: ${item.username}`);
+                logger.log(`Message sent successfully (message_id=${message.id})`);
+                logger.log("END request");
                 return;
             }
+            logger.warn("Message send failed (no message.id returned)");
+            logger.log("END request");
             return;
         }
-        await channel.messages
-            .edit(item.message_id, {
+        logger.log(`Editing existing message (message_id=${item.message_id})`);
+        try {
+            await channel.messages.edit(item.message_id, {
                 content: mention,
                 embeds: [embed],
                 components: [row],
-            })
-            .catch(async (error) => {
-                const message = await channel.send({
-                    content: mention,
-                    embeds: [embed],
-                    components: [row],
-                });
-                if (message.id) {
-                    await db
-                        .update(schema.discordBotTwitch)
-                        .set({
-                            message_id: message.id,
-                            vod_id: dataLive.id,
-                        })
-                        .where(eq(schema.discordBotTwitch.id, item.id));
-                    return;
-                }
             });
-        console_log.log(`twitchLiveEmbeds edited message with Guild ID: ${item.server_id}, Channel ID: ${item.channel_id}, Message ID: ${item.message_id} Username: ${item.username}`);
-        console_log.log(
-            `Processed twitchLiveEmbeds for ${index + 1}: ${item.username}`
-        );
+            logger.log("Message edited successfully");
+            logger.log("END request");
+            return;
+        } catch (error) {
+            logger.warn(
+                `Failed to edit message (message_id=${item.message_id}) → sending new message`
+            );
+        }
+        const fallbackMessage = await channel.send({
+            content: mention,
+            embeds: [embed],
+            components: [row],
+        });
+        if (fallbackMessage.id) {
+            await db
+                .update(schema.discordBotTwitch)
+                .set({
+                    message_id: fallbackMessage.id,
+                    vod_id: dataLive.id,
+                })
+                .where(eq(schema.discordBotTwitch.id, item.id));
+
+            logger.log(
+                `Fallback message sent successfully (message_id=${fallbackMessage.id})`
+            );
+            logger.log("END request");
+            return;
+        }
+        logger.error("Fallback send failed — no message_id");
+        logger.log("END request");
     } catch (error) {
-        console.log(error);
-        console_log.error(`Twitch ${item.username}: catch: ` + error);
+        logger.error(
+            `Unhandled exception → ${error instanceof Error ? error.message : error}`
+        );
+        if (error instanceof Error && error.stack) {
+            logger.error(`Stack trace:\n${error.stack}`);
+        }
+        logger.log("END request (error)");
         return;
     }
 };
 export const kickLiveEmbeds = async (item: IKick, index: number) => {
-    console_log.log(`Entering kickLiveEmbeds for ${item.username} (index: ${index})`);
+    const logger = console_log.createReqLogger("KICK", {
+        user: item.username,
+        guild: item.server_id,
+        channel: item.channel_id,
+        index,
+    });
+
+    logger.log("START request");
+
     const discordServer = discord.guilds.cache.get(item.server_id);
     if (!discordServer) {
-        console_log.error(
-            `Discord Server not found for ${item.username} server: ${item.server_id}`
-        );
+        logger.error("Guild not found, aborting");
+        logger.log("END request");
         return;
     }
+
     const channel = discordServer.channels.cache.get(item.channel_id);
     if (!channel) {
-        console_log.error(
-            `Discord Channel not found for ${item.username} server: ${item.server_id}`
-        );
+        logger.error("Channel not found, aborting");
+        logger.log("END request");
         return;
     }
+
     try {
+        logger.log("Fetching live data");
+
         const dataLiveReq = await fetch(
-            process.env.API_SERVER_LIVE + "/kick/" + item.username,
+            `${process.env.API_SERVER_LIVE}/kick/${item.username}`,
             {
                 method: "GET",
                 headers: {
@@ -521,14 +577,19 @@ export const kickLiveEmbeds = async (item: IKick, index: number) => {
                 },
             }
         );
+
         const dataLive = await dataLiveReq.json();
+
         if (dataLive.error) {
-            console_log.error(
-                `Kick Error getting data for ${item.username} ` +
-                dataLive.message
+            logger.warn(
+                `API returned error → ${dataLive.message ?? "unknown error"}`
             );
+            logger.log("END request");
             return;
         }
+
+        logger.log(`Status: ${dataLive.live ? "LIVE" : "OFFLINE"}`);
+
         let embed: any = {
             color: parseInt("53fc18", 16),
             url: `https://kick.com/${item.username.toLowerCase()}`,
@@ -568,54 +629,79 @@ export const kickLiveEmbeds = async (item: IKick, index: number) => {
                 iconURL: "https://cdn.doras.to/doras/icons/light/doras.webp",
             },
         };
-        const url = `https://kick.com/${item.username?.toLowerCase()}`;
-        let buttonWatch = new ButtonBuilder()
+
+        const url = `https://kick.com/${item.username.toLowerCase()}`;
+        const buttonWatch = new ButtonBuilder()
             .setLabel("Watch Stream")
             .setStyle(ButtonStyle.Link)
-            .setURL(String(url)); // Explicitly convert to string
-        let row: any = new ActionRowBuilder().addComponents(buttonWatch);
-        let buttonLinks =
-            (item.social_link_url &&
+            .setURL(url);
+
+        const row: any = new ActionRowBuilder().addComponents(buttonWatch);
+
+        if (item.social_links && item.social_link_url) {
+            row.addComponents(
                 new ButtonBuilder()
                     .setLabel("Social Links")
                     .setStyle(ButtonStyle.Link)
-                    .setURL(
-                        "https://doras.to/" + item.social_link_url || ""
-                    )) ||
-            "";
-        if (item.social_links && item.social_link_url)
-            buttonLinks && row.addComponents(buttonLinks);
+                    .setURL(`https://doras.to/${item.social_link_url}`)
+            );
+        }
+
+        /* -------------------- OFFLINE -------------------- */
+
         if (!dataLive.live) {
+            logger.log("User is offline");
+
             if (!item.keep_vod) {
-                if (item.message_id) {
-                    if (!channel.isTextBased()) return;
+                logger.log("keep_vod disabled");
+
+                if (item.message_id && channel.isTextBased()) {
+                    logger.log(
+                        `Deleting existing message (message_id=${item.message_id})`
+                    );
+
                     await channel.messages
                         .delete(item.message_id)
-                        .catch((e) => {
-                            console_log.error(
-                                `Kick ${item.username}: Error deleting message: ` +
-                                e
-                            );
-                        });
-                    await db
-                        .update(schema.discordBotKick)
-                        .set({
-                            message_id: null,
-                            vod_id: null,
-                            live: false,
-                            last_live: new Date().toISOString(),
-                            live_started_at: null,
-                        })
-                        .where(eq(schema.discordBotKick.id, item.id));
-                    return;
+                        .catch((e) =>
+                            logger.error("Failed to delete message: " + e)
+                        );
                 }
+
+                await db
+                    .update(schema.discordBotKick)
+                    .set({
+                        message_id: null,
+                        vod_id: null,
+                        live: false,
+                        last_live: new Date().toISOString(),
+                        live_started_at: null,
+                    })
+                    .where(eq(schema.discordBotKick.id, item.id));
+
+                logger.log("DB updated → offline state");
+                logger.log("END request");
                 return;
             }
-            if (item.vod_id == dataLive.video.live_id) {
+
+            logger.log("keep_vod enabled → processing VOD");
+
+            if (item.vod_id === dataLive.video.live_id) {
+                logger.log(
+                    `VOD match confirmed (vod_id=${item.vod_id}) → converting embed`
+                );
+
                 buttonWatch.setLabel("Watch Vod");
-                dataLive.video.url &&
-                    buttonWatch.setURL(String(dataLive.video.url));
-                if (!channel.isTextBased()) return;
+
+                if (dataLive.video.url) {
+                    buttonWatch.setURL(dataLive.video.url);
+                }
+
+                if (!channel.isTextBased()) {
+                    logger.warn("Channel not text-based, aborting VOD update");
+                    logger.log("END request");
+                    return;
+                }
+
                 embed.url = dataLive.video.url;
                 embed.title = dataLive.video.title;
                 embed.author = {
@@ -627,22 +713,28 @@ export const kickLiveEmbeds = async (item: IKick, index: number) => {
                 embed.fields = [
                     {
                         name: "Vod Duration",
-                        value: `${humanReadableDurationExtendedKick(
+                        value: humanReadableDurationExtendedKick(
                             dataLive.video.duration
-                        )}`,
+                        ),
                     },
                 ];
                 embed.image = {
                     url: dataLive.video.thumbnail_url,
                 };
+
                 if (item.message_id) {
-                    if (item.keep_vod) {
-                        await channel.messages.edit(item.message_id, {
-                            embeds: [embed],
-                            components: [row],
-                        });
-                    }
+                    logger.log(
+                        `Editing existing message to VOD (message_id=${item.message_id})`
+                    );
+
+                    await channel.messages.edit(item.message_id, {
+                        embeds: [embed],
+                        components: [row],
+                    });
+
+                    logger.log("VOD message edited successfully");
                 }
+
                 await db
                     .update(schema.discordBotKick)
                     .set({
@@ -653,92 +745,125 @@ export const kickLiveEmbeds = async (item: IKick, index: number) => {
                         live_started_at: null,
                     })
                     .where(eq(schema.discordBotKick.id, item.id));
-                return;
-            } else {
-                await db
-                    .update(schema.discordBotKick)
-                    .set({
-                        message_id: null,
-                        vod_id: null,
-                        live: false,
-                        last_live: new Date().toISOString(),
-                        live_started_at: null,
-                    })
-                    .where(eq(schema.discordBotKick.id, item.id));
+
+                logger.log("DB updated → offline, VOD cleared");
+                logger.log("END request (VOD processed)");
                 return;
             }
-        }
-        if (!channel.isTextBased()) return;
-        let mention: any;
-        try {
-            mention =
-                item.mention && discordServer.roles.cache.get(item.mention);
-        } catch (error) {
-            console_log.error(
-                `Kick ${item.username}: Error getting mention: ` + error
+
+            logger.log(
+                `VOD mismatch (expected=${item.vod_id}, received=${dataLive.video.live_id})`
             );
-        }
-        if (
-            (mention && mention.name == "@everyone") ||
-            (mention && mention.name == "@here")
-        ) {
-            mention = mention.name;
-        } else {
-            const message = item.message ? item.message : "";
-            mention = mention ? `<@&${item.mention}> ${message}` : message;
-        }
-        if (!item.message_id) {
-            const message = await channel.send({
-                content: item.message || "",
-                embeds: [embed],
-                components: [row],
-            });
-            if (message.id) {
-                await db
-                    .update(schema.discordBotKick)
-                    .set({
-                        message_id: message.id,
-                        vod_id: dataLive.id,
-                        live: true,
-                        live_started_at: dataLive.started_at,
-                    })
-                    .where(eq(schema.discordBotKick.id, item.id));
-                console_log.log(`kickLiveEmbeds sent message with Guild ID: ${item.server_id}, Channel ID: ${item.channel_id}, Message ID: ${message.id} Username: ${item.username}`);
-                return;
-            }
+
+            await db
+                .update(schema.discordBotKick)
+                .set({
+                    message_id: null,
+                    vod_id: null,
+                    live: false,
+                    last_live: new Date().toISOString(),
+                    live_started_at: null,
+                })
+                .where(eq(schema.discordBotKick.id, item.id));
+
+            logger.log("DB updated → offline (no valid VOD)");
+            logger.log("END request (no VOD)");
             return;
         }
-        await channel.messages
-            .edit(item.message_id, {
+
+        /* -------------------- LIVE -------------------- */
+
+        if (!channel.isTextBased()) {
+            logger.warn("Channel not text-based, aborting");
+            logger.log("END request");
+            return;
+        }
+
+        let mention: string = item.message || "";
+
+        if (item.mention) {
+            const role = discordServer.roles.cache.get(item.mention);
+            if (role?.name === "@everyone" || role?.name === "@here") {
+                mention = role.name;
+            } else if (role) {
+                mention = `<@&${item.mention}> ${mention}`;
+            }
+        }
+
+        if (!item.message_id) {
+            logger.log("No message_id → sending new message");
+
+            const message = await channel.send({
                 content: mention,
                 embeds: [embed],
                 components: [row],
-            })
-            .catch(async (error) => {
-                const message = await channel.send({
-                    content: mention,
-                    embeds: [embed],
-                    components: [row],
-                });
-                if (message.id) {
-                    await db
-                        .update(schema.discordBotKick)
-                        .set({
-                            message_id: message.id,
-                            vod_id: dataLive.id,
-                        })
-                        .where(eq(schema.discordBotKick.id, item.id));
-                    return;
-                }
             });
-        console_log.log(`kickLiveEmbeds edited message with Guild ID: ${item.server_id}, Channel ID: ${item.channel_id}, Message ID: ${item.message_id} Username: ${item.username}`);
-        console_log.log(
-            `Processed kickLiveEmbeds for ${index + 1}: ${item.username}`
+
+            await db
+                .update(schema.discordBotKick)
+                .set({
+                    message_id: message.id,
+                    vod_id: dataLive.id,
+                    live: true,
+                    live_started_at: dataLive.started_at,
+                })
+                .where(eq(schema.discordBotKick.id, item.id));
+
+            logger.log(
+                `Message sent successfully (message_id=${message.id})`
+            );
+            logger.log("END request");
+            return;
+        }
+
+        logger.log(
+            `Editing existing message (message_id=${item.message_id})`
         );
+
+        try {
+            await channel.messages.edit(item.message_id, {
+                content: mention,
+                embeds: [embed],
+                components: [row],
+            });
+
+            logger.log("Message edited successfully");
+            logger.log("END request");
+            return;
+        } catch {
+            logger.warn(
+                `Edit failed (message_id=${item.message_id}) → sending fallback`
+            );
+        }
+
+        const fallbackMessage = await channel.send({
+            content: mention,
+            embeds: [embed],
+            components: [row],
+        });
+
+        await db
+            .update(schema.discordBotKick)
+            .set({
+                message_id: fallbackMessage.id,
+                vod_id: dataLive.id,
+            })
+            .where(eq(schema.discordBotKick.id, item.id));
+
+        logger.log(
+            `Fallback message sent successfully (message_id=${fallbackMessage.id})`
+        );
+        logger.log("END request");
     } catch (error) {
-        console.log(error);
-        console_log.error(`Kick ${item.username}: catch: ` + error);
-        return;
+        logger.error(
+            `Unhandled exception → ${error instanceof Error ? error.message : error}`
+        );
+
+        if (error instanceof Error && error.stack) {
+            logger.error(`Stack trace:\n${error.stack}`);
+        }
+
+        logger.log("END request (error)");
     }
 };
 function formatViewersCount(count: number): string {
@@ -844,14 +969,35 @@ function humanReadableDurationExtendedKick(durationInMs: number): string {
 }
 const youtubeLiveEmbeds = async (item: IYoutubeLive, index: number) => {
     item.username = item.username.replace("@", "");
-    console_log.log(`Entering youtubeLiveEmbeds for ${item.username} (index: ${index})`);
+
+    const logger = console_log.createReqLogger("YT-LIVE", {
+        user: item.username,
+        guild: item.server_id,
+        channel: item.channel_id,
+        index,
+    });
+
+    logger.log("START request");
+
     const discordServer = discord.guilds.cache.get(item.server_id);
-    if (!discordServer) return;
+    if (!discordServer) {
+        logger.error("Guild not found, aborting");
+        logger.log("END request");
+        return;
+    }
+
     const channel = discordServer.channels.cache.get(item.channel_id);
-    if (!channel) return;
+    if (!channel) {
+        logger.error("Channel not found, aborting");
+        logger.log("END request");
+        return;
+    }
+
     try {
+        logger.log("Fetching live data");
+
         const dataLiveReq = await fetch(
-            process.env.API_SERVER_LIVE + "/youtube/@" + item.username,
+            `${process.env.API_SERVER_LIVE}/youtube/@${item.username}`,
             {
                 method: "GET",
                 headers: {
@@ -860,40 +1006,54 @@ const youtubeLiveEmbeds = async (item: IYoutubeLive, index: number) => {
                 },
             }
         );
+
         const dataLive = await dataLiveReq.json();
+
         if (dataLive.error) {
-            console_log.error(
-                `Youtube Error getting data for ${item.username} ` +
-                dataLive.message
+            logger.warn(
+                `API returned error → ${dataLive.message ?? "unknown error"}`
             );
+            logger.log("END request");
             return;
         }
-        if (!dataLive.live) {
-            if (!item.keep_vod || !item.vod_id) {
-                if (item.message_id) {
-                    if (!channel.isTextBased()) return;
-                    await channel.messages
-                        .delete(item.message_id)
-                        .catch((e) => {
-                            console_log.error(
-                                `Youtube ${item.username}: Error deleting message: ` +
-                                e
-                            );
-                        });
-                    await db
-                        .update(schema.discordBotYoutubeLive)
-                        .set({
-                            message_id: null,
-                            vod_id: null,
-                            live: false,
-                            last_live: new Date().toISOString(),
-                            live_started_at: null,
-                        })
-                        .where(eq(schema.discordBotYoutubeLive.id, item.id));
-                }
-                return; // Exit early when not live and no valid VOD
+
+        logger.log(`Status: ${dataLive.live ? "LIVE" : "OFFLINE"}`);
+
+        /* -------------------- OFFLINE (NO VOD) -------------------- */
+
+        if (!dataLive.live && (!item.keep_vod || !item.vod_id)) {
+            logger.log("User offline and no VOD to keep");
+
+            if (item.message_id && channel.isTextBased()) {
+                logger.log(
+                    `Deleting existing message (message_id=${item.message_id})`
+                );
+
+                await channel.messages
+                    .delete(item.message_id)
+                    .catch((e) =>
+                        logger.error("Failed to delete message: " + e)
+                    );
             }
+
+            await db
+                .update(schema.discordBotYoutubeLive)
+                .set({
+                    message_id: null,
+                    vod_id: null,
+                    live: false,
+                    last_live: new Date().toISOString(),
+                    live_started_at: null,
+                })
+                .where(eq(schema.discordBotYoutubeLive.id, item.id));
+
+            logger.log("DB updated → offline state");
+            logger.log("END request");
+            return;
         }
+
+        /* -------------------- EMBED BASE -------------------- */
+
         let embed: any = {
             color: parseInt("ff0033", 16),
             url: `https://www.youtube.com/watch?v=${dataLive.url}`,
@@ -923,71 +1083,83 @@ const youtubeLiveEmbeds = async (item: IYoutubeLive, index: number) => {
                 iconURL: "https://cdn.doras.to/doras/icons/light/doras.webp",
             },
         };
-        let buttonWatch = new ButtonBuilder()
+
+        const buttonWatch = new ButtonBuilder()
             .setLabel("Watch Stream")
             .setStyle(ButtonStyle.Link)
             .setURL(`https://www.youtube.com/watch?v=${dataLive.url}`);
-        let row: any = new ActionRowBuilder().addComponents(buttonWatch);
-        let buttonLinks =
-            (item.social_link_url &&
+
+        const row: any = new ActionRowBuilder().addComponents(buttonWatch);
+
+        if (item.social_links && item.social_link_url) {
+            row.addComponents(
                 new ButtonBuilder()
                     .setLabel("Social Links")
                     .setStyle(ButtonStyle.Link)
-                    .setURL(
-                        "https://doras.to/" + item.social_link_url || ""
-                    )) ||
-            "";
-        if (item.social_links && item.social_link_url) {
-            buttonLinks && row.addComponents(buttonLinks);
+                    .setURL(`https://doras.to/${item.social_link_url}`)
+            );
         }
-        const isNotLive = !dataLive.live;
-        const isNotVod = !item.vod_id;
-        const hasMessageId = !!item.message_id;
-        const vodIdMismatch =
-            item.vod_id !== null && item.vod_id !== dataLive.url;
-        if (
-            (isNotLive && isNotVod && hasMessageId) ||
-            (vodIdMismatch && hasMessageId && isNotLive)
-        ) {
+
+        /* -------------------- OFFLINE (VOD) -------------------- */
+
+        if (!dataLive.live) {
+            logger.log("keep_vod enabled → processing VOD");
+
+            const vodMismatch =
+                item.vod_id !== null && item.vod_id !== dataLive.url;
+
+            if (vodMismatch && item.message_id) {
+                logger.log(
+                    `VOD mismatch (expected=${item.vod_id}, received=${dataLive.url})`
+                );
+            }
+
             const vod = dataLive.vods.find(
                 (v: any) => v.video_id === item.vod_id
             );
+
             if (!vod) {
+                logger.warn("VOD not found in API response");
+
                 buttonWatch.setLabel("Watch Vod");
                 buttonWatch.setURL(
                     `https://www.youtube.com/watch?v=${item.vod_id}`
                 );
-                if (item.message_id) {
-                    if (item.keep_vod) {
-                        try {
-                            if (!channel.isTextBased()) return;
-                            await channel.messages.edit(item.message_id, {
-                                content: item.message,
-                                components: [row],
-                            });
-                        } catch (error) {
-                            console.error("Error editing message:", error);
-                        }
-                    }
+
+                if (item.message_id && item.keep_vod && channel.isTextBased()) {
+                    logger.log(
+                        `Editing message to VOD link only (message_id=${item.message_id})`
+                    );
+
+                    await channel.messages.edit(item.message_id, {
+                        content: item.message,
+                        components: [row],
+                    });
                 }
-                try {
-                    await db
-                        .update(schema.discordBotYoutubeLive)
-                        .set({
-                            message_id: null,
-                            vod_id: null,
-                            live: false,
-                            last_live: new Date().toISOString(),
-                            live_started_at: null,
-                        })
-                        .where(eq(schema.discordBotYoutubeLive.id, item.id));
-                } catch (error) {
-                    console.error("Error updating database:", error);
-                }
+
+                await db
+                    .update(schema.discordBotYoutubeLive)
+                    .set({
+                        message_id: null,
+                        vod_id: null,
+                        live: false,
+                        last_live: new Date().toISOString(),
+                        live_started_at: null,
+                    })
+                    .where(eq(schema.discordBotYoutubeLive.id, item.id));
+
+                logger.log("DB updated → offline (no embed VOD)");
+                logger.log("END request (no VOD)");
                 return;
             }
+
+            logger.log(
+                `VOD match confirmed (vod_id=${item.vod_id}) → converting embed`
+            );
+
             buttonWatch.setLabel("Watch Vod");
             buttonWatch.setURL(vod.link);
+
             embed.url = vod.link;
             embed.title = vod.title;
             embed.author = {
@@ -1005,102 +1177,153 @@ const youtubeLiveEmbeds = async (item: IYoutubeLive, index: number) => {
             embed.image = {
                 url: vod.thumbnail,
             };
-            if (item.message_id) {
-                if (item.keep_vod) {
-                    try {
-                        if (!channel.isTextBased()) return;
-                        await channel.messages.edit(item.message_id, {
-                            content: item.message,
-                            embeds: [embed],
-                            components: [row],
-                        });
-                    } catch (error) {
-                        console.error("Error editing message:", error);
-                    }
-                }
-            }
-            try {
-                await db
-                    .update(schema.discordBotYoutubeLive)
-                    .set({
-                        message_id: null,
-                        vod_id: null,
-                        live: false,
-                        last_live: new Date().toISOString(),
-                        live_started_at: null,
-                    })
-                    .where(eq(schema.discordBotYoutubeLive.id, item.id));
-            } catch (error) {
-                console.error("Error updating database:", error);
-            }
-            return;
-        }
-        if (!channel.isTextBased()) return;
-        if (!item.message_id) {
-            const message = await channel.send({
-                content: item?.message || "",
-                embeds: [embed],
-                components: [row],
-            });
-            if (message.id) {
-                await db
-                    .update(schema.discordBotYoutubeLive)
-                    .set({
-                        message_id: message.id,
-                        vod_id: dataLive.url,
-                        live: true,
-                        live_started_at: new Date().toISOString(),
-                    })
-                    .where(eq(schema.discordBotYoutubeLive.id, item.id));
-                console_log.log(`youtubeLiveEmbeds sent message with Guild ID: ${item.server_id}, Channel ID: ${item.channel_id}, Message ID: ${message.id} Username: ${item.username}`);
-                return;
-            }
-            return;
-        }
-        await channel.messages
-            .edit(item.message_id, {
-                content: item.message,
-                embeds: [embed],
-                components: [row],
-            })
-            .catch(async (error) => {
-                const message = await channel.send({
-                    content: item?.message || "",
+
+            if (item.message_id && item.keep_vod && channel.isTextBased()) {
+                logger.log(
+                    `Editing existing message to VOD embed (message_id=${item.message_id})`
+                );
+
+                await channel.messages.edit(item.message_id, {
+                    content: item.message,
                     embeds: [embed],
                     components: [row],
                 });
-                if (message.id) {
-                    await db
-                        .update(schema.discordBotYoutubeLive)
-                        .set({
-                            message_id: message.id,
-                            vod_id: dataLive.url,
-                            live: true,
-                        })
-                        .where(eq(schema.discordBotYoutubeLive.id, item.id));
-                    return;
-                }
+
+                logger.log("VOD message edited successfully");
+            }
+
+            await db
+                .update(schema.discordBotYoutubeLive)
+                .set({
+                    message_id: null,
+                    vod_id: null,
+                    live: false,
+                    last_live: new Date().toISOString(),
+                    live_started_at: null,
+                })
+                .where(eq(schema.discordBotYoutubeLive.id, item.id));
+
+            logger.log("DB updated → offline, VOD cleared");
+            logger.log("END request (VOD processed)");
+            return;
+        }
+
+        /* -------------------- LIVE -------------------- */
+
+        if (!channel.isTextBased()) {
+            logger.warn("Channel not text-based, aborting");
+            logger.log("END request");
+            return;
+        }
+
+        if (!item.message_id) {
+            logger.log("No message_id → sending new message");
+
+            const message = await channel.send({
+                content: item.message || "",
+                embeds: [embed],
+                components: [row],
             });
-        console_log.log(`youtubeLiveEmbeds edited message with Guild ID: ${item.server_id}, Channel ID: ${item.channel_id}, Message ID: ${item.message_id} Username: ${item.username}`);
-        console_log.log(
-            `Processed youtubeLiveEmbeds for ${index + 1}: ${item.username}`
+
+            await db
+                .update(schema.discordBotYoutubeLive)
+                .set({
+                    message_id: message.id,
+                    vod_id: dataLive.url,
+                    live: true,
+                    live_started_at: new Date().toISOString(),
+                })
+                .where(eq(schema.discordBotYoutubeLive.id, item.id));
+
+            logger.log(
+                `Message sent successfully (message_id=${message.id})`
+            );
+            logger.log("END request");
+            return;
+        }
+
+        logger.log(
+            `Editing existing message (message_id=${item.message_id})`
         );
+
+        try {
+            await channel.messages.edit(item.message_id, {
+                content: item.message,
+                embeds: [embed],
+                components: [row],
+            });
+
+            logger.log("Message edited successfully");
+            logger.log("END request");
+            return;
+        } catch {
+            logger.warn(
+                `Edit failed (message_id=${item.message_id}) → sending fallback`
+            );
+        }
+
+        const fallbackMessage = await channel.send({
+            content: item.message || "",
+            embeds: [embed],
+            components: [row],
+        });
+
+        await db
+            .update(schema.discordBotYoutubeLive)
+            .set({
+                message_id: fallbackMessage.id,
+                vod_id: dataLive.url,
+                live: true,
+            })
+            .where(eq(schema.discordBotYoutubeLive.id, item.id));
+
+        logger.log(
+            `Fallback message sent successfully (message_id=${fallbackMessage.id})`
+        );
+        logger.log("END request");
     } catch (error) {
-        console.log(error);
-        console_log.error(`Youtube ${item.username}: catch: ` + error);
-        return;
+        logger.error(
+            `Unhandled exception → ${error instanceof Error ? error.message : error}`
+        );
+
+        if (error instanceof Error && error.stack) {
+            logger.error(`Stack trace:\n${error.stack}`);
+        }
+
+        logger.log("END request (error)");
     }
 };
 const youtubeLatestEmbeds = async (item: IYoutubeLatest, index: number) => {
     item.username = item.username.replace("@", "");
-    console_log.log(`Entering youtubeLatestEmbeds for ${item.username} (index: ${index})`);
+
+    const logger = console_log.createReqLogger("YT-LATEST", {
+        user: item.username,
+        guild: item.server_id,
+        channel: item.channel_id,
+        index,
+    });
+
+    logger.log("START request");
+
     const discordServer = discord.guilds.cache.get(item.server_id);
-    if (!discordServer) return;
+    if (!discordServer) {
+        logger.error("Guild not found, aborting");
+        logger.log("END request");
+        return;
+    }
+
     const channel = discordServer.channels.cache.get(item.channel_id);
-    if (!channel) return;
+    if (!channel) {
+        logger.error("Channel not found, aborting");
+        logger.log("END request");
+        return;
+    }
+
     try {
+        logger.log("Fetching latest video");
+
         const dataLatestReq = await fetch(
-            process.env.API_SERVER_LIVE + "/youtube",
+            `${process.env.API_SERVER_LIVE}/youtube`,
             {
                 method: "POST",
                 headers: {
@@ -1112,11 +1335,31 @@ const youtubeLatestEmbeds = async (item: IYoutubeLatest, index: number) => {
                 }),
             }
         );
-        const _dataLatest = await dataLatestReq.json();
-        const dataLatest = _dataLatest.data;
-        if (!dataLatest) return;
-        if (dataLatest.video_id === item.video_id) return;
-        let embed: any = {
+
+        const response = await dataLatestReq.json();
+        const dataLatest = response.data;
+
+        if (!dataLatest) {
+            logger.warn("API returned no data");
+            logger.log("END request");
+            return;
+        }
+
+        if (dataLatest.video_id === item.video_id) {
+            logger.log(
+                `Video already processed (video_id=${dataLatest.video_id})`
+            );
+            logger.log("END request");
+            return;
+        }
+
+        logger.log(
+            `New video detected (video_id=${dataLatest.video_id})`
+        );
+
+        /* -------------------- EMBED -------------------- */
+
+        const embed: any = {
             color: parseInt("ff0033", 16),
             url: dataLatest.link,
             title: dataLatest.title,
@@ -1132,7 +1375,7 @@ const youtubeLatestEmbeds = async (item: IYoutubeLatest, index: number) => {
             fields: [
                 {
                     name: "Views",
-                    value: dataLatest?.views || "0",
+                    value: dataLatest.views || "0",
                     inline: true,
                 },
                 {
@@ -1145,7 +1388,7 @@ const youtubeLatestEmbeds = async (item: IYoutubeLatest, index: number) => {
                 {
                     name: "Uploaded",
                     value: `<t:${convertRelativeTimeToUnix(
-                        dataLatest?.published || ""
+                        dataLatest.published || ""
                     )}:R>`,
                 },
             ],
@@ -1158,45 +1401,58 @@ const youtubeLatestEmbeds = async (item: IYoutubeLatest, index: number) => {
                 iconURL: "https://cdn.doras.to/doras/icons/light/doras.webp",
             },
         };
-        let buttonWatch = new ButtonBuilder()
+
+        const buttonWatch = new ButtonBuilder()
             .setLabel("Watch Video")
             .setStyle(ButtonStyle.Link)
             .setURL(dataLatest.link);
-        let row: any = new ActionRowBuilder().addComponents(buttonWatch);
-        let buttonLinks =
-            (item.social_link_url &&
+
+        const row: any = new ActionRowBuilder().addComponents(buttonWatch);
+
+        if (item.social_links && item.social_link_url) {
+            row.addComponents(
                 new ButtonBuilder()
                     .setLabel("Social Links")
                     .setStyle(ButtonStyle.Link)
-                    .setURL(
-                        "https://doras.to/" + item.social_link_url || ""
-                    )) ||
-            "";
-        if (item.social_links && item.social_link_url)
-            buttonLinks && row.addComponents(buttonLinks);
-        if (!channel.isTextBased()) return;
+                    .setURL(`https://doras.to/${item.social_link_url}`)
+            );
+        }
+
+        if (!channel.isTextBased()) {
+            logger.warn("Channel not text-based, aborting");
+            logger.log("END request");
+            return;
+        }
+
+        logger.log("Sending new message");
+
         const message = await channel.send({
-            content: item?.message || "",
+            content: item.message || "",
             embeds: [embed],
             components: [row],
         });
-        if (message.id) {
-            await db
-                .update(schema.discordBotYoutubeLatest)
-                .set({
-                    video_id: dataLatest.video_id,
-                })
-                .where(eq(schema.discordBotYoutubeLatest.id, item.id));
-            console_log.log(`youtubeLatestEmbeds sent message with Guild ID: ${item.server_id}, Channel ID: ${item.channel_id}, Message ID: ${message.id} Username: ${item.username}`);
-            console_log.log(
-                `Processed youtubeLatestEmbeds for ${index + 1}: ${item.username}`
-            );
-            return;
-        }
+
+        await db
+            .update(schema.discordBotYoutubeLatest)
+            .set({
+                video_id: dataLatest.video_id,
+            })
+            .where(eq(schema.discordBotYoutubeLatest.id, item.id));
+
+        logger.log(
+            `Message sent successfully (message_id=${message.id})`
+        );
+        logger.log("END request");
     } catch (error) {
-        console.log(error);
-        console_log.error(`youtubeLatestEmbeds ${item.username}: catch: ` + error);
-        return;
+        logger.error(
+            `Unhandled exception → ${error instanceof Error ? error.message : error}`
+        );
+
+        if (error instanceof Error && error.stack) {
+            logger.error(`Stack trace:\n${error.stack}`);
+        }
+
+        logger.log("END request (error)");
     }
 };
 const youtubeLatestShortEmbeds = async (
@@ -1204,14 +1460,35 @@ const youtubeLatestShortEmbeds = async (
     index: number
 ) => {
     item.username = item.username.replace("@", "");
-    console_log.log(`Entering youtubeLatestShortEmbeds for ${item.username} (index: ${index})`);
+
+    const logger = console_log.createReqLogger("YT-SHORT", {
+        user: item.username,
+        guild: item.server_id,
+        channel: item.channel_id,
+        index,
+    });
+
+    logger.log("START request");
+
     const discordServer = discord.guilds.cache.get(item.server_id);
-    if (!discordServer) return;
+    if (!discordServer) {
+        logger.error("Guild not found, aborting");
+        logger.log("END request");
+        return;
+    }
+
     const channel = discordServer.channels.cache.get(item.channel_id);
-    if (!channel) return;
+    if (!channel) {
+        logger.error("Channel not found, aborting");
+        logger.log("END request");
+        return;
+    }
+
     try {
+        logger.log("Fetching latest short");
+
         const dataLatestReq = await fetch(
-            process.env.API_SERVER_LIVE + "/youtube/short",
+            `${process.env.API_SERVER_LIVE}/youtube/short`,
             {
                 method: "POST",
                 headers: {
@@ -1223,11 +1500,31 @@ const youtubeLatestShortEmbeds = async (
                 }),
             }
         );
-        const _dataLatest = await dataLatestReq.json();
-        const dataLatest = _dataLatest.data;
-        if (!dataLatest) return;
-        if (dataLatest.video_id === item.video_id) return;
-        let embed: any = {
+
+        const response = await dataLatestReq.json();
+        const dataLatest = response.data;
+
+        if (!dataLatest) {
+            logger.warn("API returned no data");
+            logger.log("END request");
+            return;
+        }
+
+        if (dataLatest.video_id === item.video_id) {
+            logger.log(
+                `Short already processed (video_id=${dataLatest.video_id})`
+            );
+            logger.log("END request");
+            return;
+        }
+
+        logger.log(
+            `New short detected (video_id=${dataLatest.video_id})`
+        );
+
+        /* -------------------- EMBED -------------------- */
+
+        const embed: any = {
             color: parseInt("ff0033", 16),
             url: dataLatest.link,
             title: dataLatest.title,
@@ -1243,13 +1540,13 @@ const youtubeLatestShortEmbeds = async (
             fields: [
                 {
                     name: "Views",
-                    value: dataLatest?.views,
+                    value: dataLatest.views,
                     inline: true,
                 },
                 {
                     name: "Uploaded",
                     value: `<t:${convertRelativeTimeToUnix(
-                        dataLatest?.published || ""
+                        dataLatest.published || ""
                     )}:R>`,
                 },
             ],
@@ -1262,47 +1559,58 @@ const youtubeLatestShortEmbeds = async (
                 iconURL: "https://cdn.doras.to/doras/icons/light/doras.webp",
             },
         };
-        let buttonWatch = new ButtonBuilder()
+
+        const buttonWatch = new ButtonBuilder()
             .setLabel("Watch Video")
             .setStyle(ButtonStyle.Link)
             .setURL(dataLatest.link);
-        let row: any = new ActionRowBuilder().addComponents(buttonWatch);
-        let buttonLinks =
-            (item.social_link_url &&
+
+        const row: any = new ActionRowBuilder().addComponents(buttonWatch);
+
+        if (item.social_links && item.social_link_url) {
+            row.addComponents(
                 new ButtonBuilder()
                     .setLabel("Social Links")
                     .setStyle(ButtonStyle.Link)
-                    .setURL(
-                        "https://doras.to/" + item.social_link_url || ""
-                    )) ||
-            "";
-        if (item.social_links && item.social_link_url)
-            buttonLinks && row.addComponents(buttonLinks);
-        if (!channel.isTextBased()) return;
+                    .setURL(`https://doras.to/${item.social_link_url}`)
+            );
+        }
+
+        if (!channel.isTextBased()) {
+            logger.warn("Channel not text-based, aborting");
+            logger.log("END request");
+            return;
+        }
+
+        logger.log("Sending new short message");
+
         const message = await channel.send({
-            content: item?.message || "",
+            content: item.message || "",
             embeds: [embed],
             components: [row],
         });
-        if (message.id) {
-            await db
-                .update(schema.discordBotYoutubeLatestShort)
-                .set({
-                    video_id: dataLatest.video_id,
-                })
-                .where(eq(schema.discordBotYoutubeLatestShort.id, item.id));
-            console_log.log(`youtubeLatestShortEmbeds Embed sent message with Guild ID: ${item.server_id}, Channel ID: ${item.channel_id}, Message ID: ${message.id} Username: ${item.username}`);
-            console_log.log(
-                `Processed youtubeLatestShortEmbeds Embed for ${index + 1}: ${item.username}`
-            );
-            return;
-        }
-    } catch (error) {
-        console.log(error);
-        console_log.error(
-            `Youtube Latest Short ${item.username}: catch: ` + error
+
+        await db
+            .update(schema.discordBotYoutubeLatestShort)
+            .set({
+                video_id: dataLatest.video_id,
+            })
+            .where(eq(schema.discordBotYoutubeLatestShort.id, item.id));
+
+        logger.log(
+            `Message sent successfully (message_id=${message.id})`
         );
-        return;
+        logger.log("END request");
+    } catch (error) {
+        logger.error(
+            `Unhandled exception → ${error instanceof Error ? error.message : error}`
+        );
+
+        if (error instanceof Error && error.stack) {
+            logger.error(`Stack trace:\n${error.stack}`);
+        }
+
+        logger.log("END request (error)");
     }
 };
 export const commands = new Map();

@@ -32,6 +32,7 @@ import {
     createEventSubSubscriptionKick,
     deleteEventSubSubscriptionKick,
 } from "./kick";
+import { normalizeTwitchUsername } from "./utils/normalize";
 //web server
 const baseHeaders = {
     "X-Service-Name": "DorasBot",
@@ -295,6 +296,7 @@ app.post("/api/v1/connection", async (e) => {
             keep_vod,
             message,
         } = body;
+        const normalizedUsername = normalizeTwitchUsername(username);
         const userData: any = await db
             .select()
             .from(userServerAccess)
@@ -330,7 +332,7 @@ app.post("/api/v1/connection", async (e) => {
         if (!channel) return e.json({ error: "Channel not found" });
         if (type === "twitch") {
             const dataLiveReq = await fetch(
-                process.env.API_SERVER_LIVE + "/twitch/" + username,
+                process.env.API_SERVER_LIVE + "/twitch/" + normalizedUsername,
                 {
                     method: "GET",
                     headers: {
@@ -352,7 +354,7 @@ app.post("/api/v1/connection", async (e) => {
                     server_id: server_id,
                     account_id: account_id,
                     channel_id: channel_id,
-                    username: username,
+                    username: normalizedUsername,
                     social_links: social_links || false,
                     social_link_url: social_link_url,
                     keep_vod: keep_vod || false,
@@ -361,7 +363,7 @@ app.post("/api/v1/connection", async (e) => {
                 .returning();
             if (newRow.length > 0) {
                 await createEventSubSubscription(
-                    newRow[0].username,
+                    normalizedUsername,
                     "stream.online"
                 );
                 return e.json({
@@ -587,6 +589,7 @@ app.patch("/api/v1/connection", async (e) => {
             social_link_url,
             keep_vod,
         } = body;
+        const normalizedUsername = normalizeTwitchUsername(username);
         const userData: any = await db
             .select()
             .from(userServerAccess)
@@ -622,7 +625,7 @@ app.patch("/api/v1/connection", async (e) => {
         if (!channel) return e.json({ error: "Channel not found" });
         if (type === "twitch") {
             const dataLiveReq = await fetch(
-                process.env.API_SERVER_LIVE + "/twitch/" + username,
+                process.env.API_SERVER_LIVE + "/twitch/" + normalizedUsername,
                 {
                     method: "GET",
                     headers: {
@@ -640,16 +643,19 @@ app.patch("/api/v1/connection", async (e) => {
             const check = await db
                 .select()
                 .from(discordBotTwitch)
-                .where(eq(discordBotTwitch.username, username));
+                .where(eq(discordBotTwitch.username, normalizedUsername));
             if (check.length <= 1) {
-                await deleteEventSubSubscription(username);
+                await deleteEventSubSubscription(normalizedUsername);
             }
-            await createEventSubSubscription(username, "stream.online");
+            await createEventSubSubscription(
+                normalizedUsername,
+                "stream.online"
+            );
             const updateRow = await db
                 .update(discordBotTwitch)
                 .set({
                     channel_id: channel_id,
-                    username: username,
+                    username: normalizedUsername,
                     message: message,
                     social_links: social_links || false,
                     social_link_url: social_link_url,
@@ -1352,18 +1358,22 @@ app.get("/api/live/twitch/:slug", async (c) => {
         };
         const tokenManager = new TwitchTokenManager();
         const slug = c.req.param("slug");
-        const userData = await getTwitchUser(slug);
+        const normalizedSlug = normalizeTwitchUsername(slug);
+        const userData = await getTwitchUser(normalizedSlug);
         const accessToken = await tokenManager.getAccessToken();
         if (!userData) {
             return c.json(data, { status: 200 });
         }
-        await fetch(`https://api.twitch.tv/helix/streams?user_login=` + slug, {
-            method: "GET",
-            headers: {
-                Authorization: "Bearer " + accessToken,
-                "Client-ID": process.env.TWITCH_CLIENT_ID || "",
-            },
-        })
+        await fetch(
+            `https://api.twitch.tv/helix/streams?user_login=` + normalizedSlug,
+            {
+                method: "GET",
+                headers: {
+                    Authorization: "Bearer " + accessToken,
+                    "Client-ID": process.env.TWITCH_CLIENT_ID || "",
+                },
+            }
+        )
             .then(function (response) {
                 return response.json();
             })

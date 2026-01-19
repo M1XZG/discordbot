@@ -16,6 +16,7 @@ import { randomUUID } from "crypto";
 import { createEventSubSubscription } from "../twitch";
 import { createEventSubSubscriptionKick } from "../kick";
 import { eq } from "drizzle-orm";
+import { normalizeTwitchUsername } from "../utils/normalize";
 discord.on(
     Events.InteractionCreate,
     async (interaction: Interaction): Promise<any> => {
@@ -35,6 +36,9 @@ discord.on(
                             AddButtonDataTwitch.delete(interaction.message.id);
                             return;
                         }
+                        const normalizedUsername = normalizeTwitchUsername(
+                            data.username
+                        );
                         const dataDB = await db
                             .insert(schema.discordBotTwitch)
                             .values({
@@ -42,7 +46,7 @@ discord.on(
                                 account_id: interaction.user.id,
                                 channel_id: data?.channel || "",
                                 server_id: data.server || "",
-                                username: data.username || "",
+                                username: normalizedUsername,
                                 message_id: null,
                                 social_links: false,
                                 keep_vod: data.keep_vod || false,
@@ -63,7 +67,10 @@ discord.on(
                                 content: `${data.username} has been added to the database.`,
                                 ephemeral: true,
                             });
-                            const item = dataDB[0];
+                            const item = {
+                                ...dataDB[0],
+                                username: normalizedUsername,
+                            };
                             const eventSub = await createEventSubSubscription(
                                 item.username,
                                 "stream.online"

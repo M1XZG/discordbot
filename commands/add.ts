@@ -17,6 +17,7 @@ import {
     AddButtonDataKick,
 } from "..";
 import platforms from "../platforms";
+import { normalizeTwitchUsername } from "../utils/normalize";
 export default {
     data: new SlashCommandBuilder()
         .setName("add")
@@ -63,14 +64,20 @@ export default {
                 ephemeral: true,
             });
             const platform = inter.options.getString("platform");
-            const username = inter.options.getString("username");
+            const usernameRaw = inter.options.getString("username");
+            const usernameNormalized = normalizeTwitchUsername(
+                usernameRaw || ""
+            );
+            const usernameClean = usernameRaw?.replace("@", "");
             const channel = inter.options.getChannel("channel");
             const keep_vod = inter.options.getBoolean("keep_vod");
             const message = inter.options.getString("message");
             try {
                 if (platform === "twitch") {
                     const dataLiveReq = await fetch(
-                        process.env.API_SERVER_LIVE + "/twitch/" + username,
+                        process.env.API_SERVER_LIVE +
+                            "/twitch/" +
+                            usernameNormalized,
                         {
                             method: "GET",
                             headers: {
@@ -81,19 +88,19 @@ export default {
                     const dataLive = await dataLiveReq.json();
                     if (!dataLive?.user?.username) {
                         return await inter.editReply({
-                            content: `User ${username} not found on Twitch`,
+                            content: `User ${usernameRaw} not found on Twitch`,
                         });
                     }
                     const embed = new EmbedBuilder();
                     embed.setTitle(`${dataLive.user.username}`);
-                    embed.setURL(`https://www.twitch.tv/${username}`);
+                    embed.setURL(`https://www.twitch.tv/${usernameNormalized}`);
                     embed.setAuthor({
                         name: "Doras Bot",
                         iconURL: discord.user?.avatarURL() || "",
                     });
                     embed.setColor(0x6441a5);
                     embed.setDescription(
-                        `${username} added by ${inter.user.username}`
+                        `${usernameRaw} added by ${inter.user.username}`
                     );
                     embed.setImage(dataLive.user.profile_image);
                     embed.setTimestamp();
@@ -115,7 +122,7 @@ export default {
                         components: [row],
                     });
                     AddButtonDataTwitch.set(data.id, {
-                        username: username,
+                        username: usernameNormalized,
                         channel: channel?.id || "",
                         server: inter.guild?.id || "",
                         account: inter.user.id,
@@ -127,7 +134,7 @@ export default {
                 }
                 if (platform === "kick") {
                     const dataLiveReq = await fetch(
-                        process.env.API_SERVER_LIVE + "/kick/" + username,
+                        process.env.API_SERVER_LIVE + "/kick/" + usernameRaw,
                         {
                             method: "GET",
                             headers: {
@@ -138,19 +145,19 @@ export default {
                     const dataLive = await dataLiveReq.json();
                     if (!dataLive?.user?.username) {
                         return await inter.editReply({
-                            content: `User ${username} not found on Kick`,
+                            content: `User ${usernameRaw} not found on Kick`,
                         });
                     }
                     const embed = new EmbedBuilder();
                     embed.setTitle(`${dataLive.user.username}`);
-                    embed.setURL(`https://kick.com/${username}`);
+                    embed.setURL(`https://kick.com/${usernameRaw}`);
                     embed.setAuthor({
                         name: "Doras Bot",
                         iconURL: discord.user?.avatarURL() || "",
                     });
                     embed.setColor(0x53fc18);
                     embed.setDescription(
-                        `${username} added by ${inter.user.username}`
+                        `${usernameRaw} added by ${inter.user.username}`
                     );
                     embed.setImage(dataLive.user.profile_image);
                     embed.setTimestamp();
@@ -172,7 +179,7 @@ export default {
                         components: [row],
                     });
                     AddButtonDataKick.set(data.id, {
-                        username: username,
+                        username: usernameRaw,
                         channel: channel?.id || "",
                         server: inter.guild?.id || "",
                         account: inter.user.id,
@@ -186,7 +193,7 @@ export default {
                     const dataLiveReq = await fetch(
                         process.env.API_SERVER_LIVE +
                             "/youtube/@" +
-                            username?.replace("@", ""),
+                            usernameClean,
                         {
                             method: "GET",
                             headers: {
@@ -197,16 +204,13 @@ export default {
                     const dataLive = await dataLiveReq.json();
                     if (!dataLive?.channel?.id) {
                         return await inter.editReply({
-                            content: `User ${username?.replace(
-                                "@",
-                                ""
-                            )} not found on Youtube`,
+                            content: `User ${usernameClean} not found on Youtube`,
                         });
                     }
                     const embed = new EmbedBuilder();
                     embed.setTitle(`${dataLive.channel.name}`);
                     embed.setURL(
-                        `https://www.youtube.com/@${username?.replace("@", "")}`
+                        `https://www.youtube.com/@${usernameClean}`
                     );
                     embed.setAuthor({
                         name: "Doras Bot",
@@ -214,9 +218,7 @@ export default {
                     });
                     embed.setColor(0x6441a5);
                     embed.setDescription(
-                        `${username?.replace("@", "")} added by ${
-                            inter.user.username
-                        }`
+                        `${usernameClean} added by ${inter.user.username}`
                     );
                     embed.setImage(dataLive.channel.profile_image);
                     embed.setTimestamp();
@@ -238,7 +240,7 @@ export default {
                         components: [row],
                     });
                     AddButtonDataYoutubeLive.set(data.id, {
-                        username: username?.replace("@", ""),
+                        username: usernameClean,
                         channel: channel?.id || "",
                         server: inter.guild?.id || "",
                         account: inter.user.id,
@@ -252,7 +254,7 @@ export default {
                     const dataLiveReq = await fetch(
                         process.env.API_SERVER_LIVE +
                             "/youtube/@" +
-                            username?.replace("@", ""),
+                            usernameClean,
                         {
                             method: "GET",
                             headers: {
@@ -263,16 +265,13 @@ export default {
                     const dataLive = await dataLiveReq.json();
                     if (!dataLive?.channel?.id) {
                         return await inter.editReply({
-                            content: `User ${username?.replace(
-                                "@",
-                                ""
-                            )} not found on Youtube`,
+                            content: `User ${usernameClean} not found on Youtube`,
                         });
                     }
                     const embed = new EmbedBuilder();
                     embed.setTitle(`${dataLive.channel.name}`);
                     embed.setURL(
-                        `https://www.youtube.com/@${username?.replace("@", "")}`
+                        `https://www.youtube.com/@${usernameClean}`
                     );
                     embed.setAuthor({
                         name: "Doras Bot",
@@ -280,9 +279,7 @@ export default {
                     });
                     embed.setColor(0x6441a5);
                     embed.setDescription(
-                        `${username?.replace("@", "")} added by ${
-                            inter.user.username
-                        }`
+                        `${usernameClean} added by ${inter.user.username}`
                     );
                     embed.setImage(dataLive.channel.profile_image);
                     embed.setTimestamp();
@@ -304,7 +301,7 @@ export default {
                         components: [row],
                     });
                     AddButtonDataYoutubeLatest.set(data.id, {
-                        username: username?.replace("@", ""),
+                        username: usernameClean,
                         channel: channel?.id || "",
                         server: inter.guild?.id || "",
                         account: inter.user.id,
@@ -317,7 +314,7 @@ export default {
                     const dataLiveReq = await fetch(
                         process.env.API_SERVER_LIVE +
                             "/youtube/@" +
-                            username?.replace("@", ""),
+                            usernameClean,
                         {
                             method: "GET",
                             headers: {
@@ -328,16 +325,13 @@ export default {
                     const dataLive = await dataLiveReq.json();
                     if (!dataLive?.channel?.id) {
                         return await inter.editReply({
-                            content: `User ${username?.replace(
-                                "@",
-                                ""
-                            )} not found on Youtube`,
+                            content: `User ${usernameClean} not found on Youtube`,
                         });
                     }
                     const embed = new EmbedBuilder();
                     embed.setTitle(`${dataLive.channel.name}`);
                     embed.setURL(
-                        `https://www.youtube.com/@${username?.replace("@", "")}`
+                        `https://www.youtube.com/@${usernameClean}`
                     );
                     embed.setAuthor({
                         name: "Doras Bot",
@@ -345,9 +339,7 @@ export default {
                     });
                     embed.setColor(0x6441a5);
                     embed.setDescription(
-                        `${username?.replace("@", "")} added by ${
-                            inter.user.username
-                        }`
+                        `${usernameClean} added by ${inter.user.username}`
                     );
                     embed.setImage(dataLive.channel.profile_image);
                     embed.setTimestamp();
@@ -369,7 +361,7 @@ export default {
                         components: [row],
                     });
                     AddButtonDataYoutubeLatestShort.set(data.id, {
-                        username: username?.replace("@", ""),
+                        username: usernameClean,
                         channel: channel?.id || "",
                         server: inter.guild?.id || "",
                         account: inter.user.id,

@@ -123,6 +123,7 @@ interface TwitchUser {
 }
 const tokenManager = new TwitchTokenManager();
 const getTwitchUserId = async (loginName: string): Promise<string | null> => {
+    const login = loginName.toLowerCase();
     const clientId = process.env.TWITCH_CLIENT_ID;
     const accessToken = await tokenManager.getAccessToken();
     if (!clientId || !accessToken) {
@@ -132,7 +133,7 @@ const getTwitchUserId = async (loginName: string): Promise<string | null> => {
         return null;
     }
 
-    const apiUrl = `https://api.twitch.tv/helix/users?login=${loginName}`;
+    const apiUrl = `https://api.twitch.tv/helix/users?login=${login}`;
 
     try {
         const response = await fetch(apiUrl, {
@@ -150,7 +151,7 @@ const getTwitchUserId = async (loginName: string): Promise<string | null> => {
             console.error("Response body:", errorBody);
             if (response.status == 401) {
                 await tokenManager.refreshAccessToken();
-                return await getTwitchUserId(loginName);
+                return await getTwitchUserId(login);
             }
             return null;
         }
@@ -160,7 +161,7 @@ const getTwitchUserId = async (loginName: string): Promise<string | null> => {
             const user: TwitchUser = data.data[0] as TwitchUser; // Type assertion
             return user.id;
         } else {
-            console.warn(`User with login name "${loginName}" not found.`);
+            console.warn(`User with login name "${login}" not found.`);
             return null;
         }
     } catch (error) {
@@ -169,6 +170,7 @@ const getTwitchUserId = async (loginName: string): Promise<string | null> => {
     }
 };
 const getTwitchUser = async (loginName: string): Promise<TwitchUser | null> => {
+    const login = loginName.toLowerCase();
     const clientId = process.env.TWITCH_CLIENT_ID;
     const accessToken = await tokenManager.getAccessToken();
     if (!clientId || !accessToken) {
@@ -178,7 +180,7 @@ const getTwitchUser = async (loginName: string): Promise<TwitchUser | null> => {
         return null;
     }
 
-    const apiUrl = `https://api.twitch.tv/helix/users?login=${loginName}`;
+    const apiUrl = `https://api.twitch.tv/helix/users?login=${login}`;
 
     try {
         const response = await fetch(apiUrl, {
@@ -196,7 +198,7 @@ const getTwitchUser = async (loginName: string): Promise<TwitchUser | null> => {
             console.error("Response body:", errorBody);
             if (response.status == 401) {
                 await tokenManager.refreshAccessToken();
-                return await getTwitchUser(loginName);
+                return await getTwitchUser(login);
             }
             return null;
         }
@@ -206,7 +208,7 @@ const getTwitchUser = async (loginName: string): Promise<TwitchUser | null> => {
             const user: TwitchUser = data.data[0] as TwitchUser; // Type assertion
             return user;
         } else {
-            console.warn(`User with login name "${loginName}" not found.`);
+            console.warn(`User with login name "${login}" not found.`);
             return null;
         }
     } catch (error) {

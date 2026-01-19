@@ -25,6 +25,7 @@ import {
 } from "./types";
 import { eq, isNull } from "drizzle-orm";
 import cron from "node-cron";
+import { normalizeTwitchUsername } from "./utils/normalize";
 export const AddButtonDataTwitch = new Map();
 export const AddButtonDataKick = new Map();
 export const AddButtonDataYoutubeLive = new Map();
@@ -55,8 +56,26 @@ export const discord = new Client({
     ],
 });
 discord.login(process.env.DISCORD_TOKEN);
+const normalizeExistingTwitchUsernames = async () => {
+    const rows = await db.select().from(schema.discordBotTwitch);
+    let updated = 0;
+    for (const row of rows) {
+        const normalized = normalizeTwitchUsername(row.username);
+        if (normalized !== row.username) {
+            await db
+                .update(schema.discordBotTwitch)
+                .set({ username: normalized })
+                .where(eq(schema.discordBotTwitch.id, row.id));
+            updated++;
+        }
+    }
+    if (updated > 0) {
+        console_log.log(`Normalized ${updated} Twitch username(s) to lowercase`);
+    }
+};
 discord.on(Events.ClientReady, async () => {
     console_log.colour(discord?.user?.username + " bot is ready", "green");
+    await normalizeExistingTwitchUsernames();
     await registerSlashCommands();
     const task = cron.schedule("*/10 * * * *", async () => {
         await TwitchEmbedLoop();

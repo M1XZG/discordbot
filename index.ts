@@ -36,7 +36,6 @@ export const AddButtonDataXLatestPost = new Map();
 export const discord = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildPresences,
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.GuildWebhooks,
@@ -46,7 +45,6 @@ export const discord = new Client({
         GatewayIntentBits.DirectMessages,
         GatewayIntentBits.DirectMessageReactions,
         GatewayIntentBits.GuildVoiceStates,
-        GatewayIntentBits.MessageContent,
     ],
     partials: [
         Partials.Message,

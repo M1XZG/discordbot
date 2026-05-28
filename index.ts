@@ -1354,7 +1354,7 @@ const youtubeLatestEmbeds = async (item: IYoutubeLatest, index: number) => {
         logger.log("Fetching latest video");
 
         const dataLatestReq = await fetch(
-            `${process.env.API_SERVER_LIVE}/youtube`,
+            `${process.env.API_SERVER_LIVE?.replace("/v2/live", "")}/youtube`,
             {
                 method: "POST",
                 headers: {
@@ -1519,7 +1519,7 @@ const youtubeLatestShortEmbeds = async (
         logger.log("Fetching latest short");
 
         const dataLatestReq = await fetch(
-            `${process.env.API_SERVER_LIVE}/youtube/short`,
+            `${process.env.API_SERVER_LIVE?.replace("/v2/live", "")}/youtube/short`,
             {
                 method: "POST",
                 headers: {
